@@ -1,13 +1,13 @@
-// ------------------- CONFIGURAÇÃO ---------------------------------
-const SUPABASE_URL = "SUA_URL_AQUI"; 
-const SUPABASE_KEY = "SUA_KEY_AQUI"; 
-// -------------------------------------------------------------------
+// app.js
 
-if (SUPABASE_URL === "SUA_URL_AQUI") {
-    alert("ATENÇÃO: Configure suas chaves do Supabase no arquivo app.js");
+// Verifica se o arquivo de configuração foi carregado
+if (typeof APP_CONFIG === 'undefined') {
+    console.error('ERRO: Arquivo config.js não foi carregado ou está corrompido.');
+    alert('Erro de configuração: Verifique o console (F12).');
 }
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Inicializa Supabase usando as variáveis do arquivo config.js
+const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_KEY);
 
 // Elementos do DOM
 const els = {
@@ -24,7 +24,7 @@ const els = {
 let currentLayer = null; // Camada sendo desenhada/editada atualmente
 
 // 1. Inicializar Mapa
-const map = L.map('map').setView([-12.97, -38.5], 6); // Foco Bahia/Brasil
+const map = L.map('map').setView([-12.97, -38.5], 6); // Foco Bahia/Brasil (Ajuste conforme necessidade)
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -112,7 +112,7 @@ els.inputShp.addEventListener('change', async (ev) => {
         
         map.fitBounds(currentLayer.getBounds());
         
-        // Preencher dados
+        // Preencher dados (tenta adivinhar propriedades comuns)
         if (feature.properties) {
             els.inputName.value = feature.properties.Name || feature.properties.NOME || '';
         }

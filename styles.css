@@ -101,6 +101,10 @@ input[type=text], input[type=number] {
 input:focus { border-color: var(--primary); }
 input[readonly] { background: rgba(255,255,255,0.05); cursor: default; }
 
+.file-input-wrapper {
+  flex: 1;
+}
+
 /* Botões */
 button, .btn-secondary {
   cursor: pointer;
@@ -131,6 +135,8 @@ button, .btn-secondary {
   text-align: center;
   font-size: 0.85rem;
   padding: 11px;
+  display: block;
+  box-sizing: border-box;
 }
 .btn-secondary:hover { background: rgba(255,255,255,0.2); }
 
@@ -195,6 +201,7 @@ button, .btn-secondary {
   gap: 10px;
 }
 .toast.error { border-left-color: var(--danger); }
+.toast.info { border-left-color: #3b82f6; }
 
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
