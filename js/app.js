@@ -1,4 +1,4 @@
-// js/app.js - BEL AGRÍCOLA (Versão Final Completa)
+// js/app.js - BEL AGRÍCOLA (Versão Final Dashboard)
 
 // 1. VERIFICAÇÃO DE CONFIGURAÇÃO
 if (typeof APP_CONFIG === 'undefined') {
@@ -27,20 +27,146 @@ window.switchView = function(viewId) {
     if(view) view.classList.add('active');
 
     // Ações específicas ao abrir cada tela
+    if(viewId === 'dashboard') {
+        setTimeout(() => { if(mapDash) mapDash.invalidateSize(); }, 200);
+        loadDashboardData();
+    }
     if(viewId === 'fazendas') {
-        // Corrige tamanho do mapa ao abrir a aba
-        setTimeout(() => { 
-            if(typeof map !== 'undefined') map.invalidateSize(); 
-        }, 200);
-        loadOwnersForSelect(); // Atualiza lista de pesquisa de fornecedores
+        setTimeout(() => { if(typeof map !== 'undefined') map.invalidateSize(); }, 200);
+        loadOwnersForSelect();
     }
     if(viewId === 'proprietarios') loadOwnersList();
     if(viewId === 'frentes') loadFrontsList();
 }
 
+// ============================================================
+// 0. MÓDULO DASHBOARD (NOVO)
+// ============================================================
+let mapDash = null;
+let layerGroupDash = null;
+
+function initDashboardMap() {
+    if(mapDash) return; // Já iniciado
+    
+    const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
+    
+    mapDash = L.map('map-dashboard', { 
+        center: USINA_COORDS, 
+        zoom: 13, 
+        zoomControl: false, // Custom layout se quiser
+        layers: [googleSat] 
+    });
+    L.control.zoom({ position: 'topright' }).addTo(mapDash);
+
+    // Marcador Usina
+    const usinaIcon = L.divIcon({
+        html: '<i class="fa-solid fa-industry" style="color: #fff; font-size: 26px; text-shadow: 0 2px 5px black;"></i>',
+        className: 'custom-div-icon',
+        iconSize: [30, 30], iconAnchor: [15, 15]
+    });
+    L.marker(USINA_COORDS, { icon: usinaIcon }).addTo(mapDash).bindPopup("<strong>USINA BEL</strong>");
+    
+    layerGroupDash = L.featureGroup().addTo(mapDash);
+}
+
+async function loadDashboardData() {
+    initDashboardMap();
+    const listEl = document.getElementById('dash-top5-list');
+    const totalEl = document.getElementById('dash-total-area');
+    
+    // Busca todas as fazendas
+    const { data, error } = await sb.rpc('get_farms');
+    
+    if(error || !data) {
+        listEl.innerHTML = '<li>Erro ao carregar dados.</li>';
+        return;
+    }
+
+    layerGroupDash.clearLayers();
+    let bounds = L.latLngBounds([USINA_COORDS]);
+    let totalArea = 0;
+    let ownerStats = {};
+
+    data.forEach(f => {
+        // 1. Somatória de Área e Agrupamento
+        const area = Number(f.area_ha || 0);
+        totalArea += area;
+        
+        const owner = f.owner || 'Não Definido';
+        if(!ownerStats[owner]) ownerStats[owner] = 0;
+        ownerStats[owner] += area;
+
+        // 2. Desenhar no Mapa (Apenas visualização)
+        const feats = f.geojson.features || [f.geojson];
+        feats.forEach(ft => {
+             // Reutiliza a função de criar layer, mas força estilo readonly
+             // Precisamos garantir que createLayerFromFeature esteja acessível ou duplicar lógica simples
+             const layer = L.geoJSON(ft, {
+                style: { color: '#10b981', weight: 2, fillOpacity: 0.4 } // Cor verde para dashboard
+             });
+             
+             // Tooltip simples
+             let labelName = (ft.properties.talhao || '').replace(/Talhão\s*|T-/yi, '').trim();
+             layer.bindTooltip(`${labelName} (${area.toFixed(1)} ha)`, { direction:'center', className: 'talhao-label', permanent: false });
+             
+             layerGroupDash.addLayer(layer);
+             if(layer.getBounds().isValid()) bounds.extend(layer.getBounds());
+        });
+    });
+
+    // Ajusta zoom
+    if(data.length > 0) mapDash.fitBounds(bounds, { padding: [50, 50] });
+
+    // 3. Calcular TOP 5
+    // Converte objeto em array: [{name: 'João', area: 100}, ...]
+    let sortedOwners = Object.keys(ownerStats).map(k => ({ name: k, area: ownerStats[k] }));
+    // Ordena decrescente
+    sortedOwners.sort((a, b) => b.area - a.area);
+
+    const top5 = sortedOwners.slice(0, 5);
+    const others = sortedOwners.slice(5);
+    const othersArea = others.reduce((acc, curr) => acc + curr.area, 0);
+
+    // 4. Renderizar HTML
+    totalEl.innerText = totalArea.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + " ha";
+    listEl.innerHTML = '';
+
+    // Função helper para barra de progresso
+    const maxArea = top5.length > 0 ? top5[0].area : 1; // Evita div por zero
+
+    top5.forEach((item, index) => {
+        const percent = (item.area / maxArea) * 100;
+        listEl.innerHTML += `
+            <li>
+                <div style="width:100%">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="top5-name">${index+1}. ${item.name}</span>
+                        <span class="top5-val">${item.area.toFixed(2)} ha</span>
+                    </div>
+                    <div class="top5-bar-bg"><div class="top5-bar-fill" style="width:${percent}%"></div></div>
+                </div>
+            </li>
+        `;
+    });
+
+    if(others.length > 0) {
+         listEl.innerHTML += `
+            <li style="margin-top:10px; border-top:1px dashed #555; padding-top:10px;">
+                <div style="width:100%">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="top5-name">Outros (${others.length})</span>
+                        <span class="top5-val">${othersArea.toFixed(2)} ha</span>
+                    </div>
+                    <div class="top5-bar-bg"><div class="top5-bar-fill" style="width: ${(othersArea/totalArea)*100}%; background: #64748b"></div></div>
+                </div>
+            </li>
+        `;
+    }
+}
+
 
 // ============================================================
-// 1. MÓDULO PROPRIETÁRIOS (FORNECEDORES)
+// 1. MÓDULO PROPRIETÁRIOS (FORNECEDORES) - Manter Igual
 // ============================================================
 async function loadOwnersList() {
     const tbody = document.getElementById('owner-list-body');
@@ -140,7 +266,7 @@ window.delOwner = async function(id) {
 
 
 // ============================================================
-// 2. MÓDULO FRENTES DE SERVIÇO
+// 2. MÓDULO FRENTES DE SERVIÇO - Manter Igual
 // ============================================================
 async function loadFrontsList() {
     const tbody = document.getElementById('front-list-body');
@@ -213,17 +339,16 @@ window.delFront = async function(id) {
 
 
 // ============================================================
-// 3. MÓDULO FAZENDAS (MAPA)
+// 3. MÓDULO FAZENDAS (CRUD MAPA)
 // ============================================================
 const elsMap = {
     inputCod: document.getElementById('input-cod'),
     inputName: document.getElementById('input-name'),
-    inputOwner: document.getElementById('input-owner'), // Input do datalist
+    inputOwner: document.getElementById('input-owner'),
     inputShp: document.getElementById('input-shp'),
     btnOpenSave: document.getElementById('btn-open-save'),
     btnCancel: document.getElementById('btn-cancel-edit'),
     farmList: document.getElementById('farm-list'),
-    // Modal
     modalOverlay: document.getElementById('modal-overlay'),
     modalTitle: document.getElementById('modal-title'),
     tableBody: document.getElementById('talhoes-tbody'),
@@ -235,11 +360,10 @@ let currentLayerGroup = L.featureGroup();
 let currentFeaturesData = []; 
 let editingFarmId = null;
 
-// --- MAPA SETUP ---
+// --- MAPA SETUP (CRUD) ---
 const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
 
-// Inicia focado na USINA
 const map = L.map('map', { 
     center: USINA_COORDS, 
     zoom: 13, 
@@ -248,54 +372,45 @@ const map = L.map('map', {
 L.control.layers({ "Satélite": googleSat, "Mapa": osm }).addTo(map);
 currentLayerGroup.addTo(map);
 
-// Marcador da Usina
-const usinaIcon = L.divIcon({
-    html: '<i class="fa-solid fa-industry" style="color: #fff; font-size: 26px; text-shadow: 0 2px 5px black;"></i>',
-    className: 'custom-div-icon',
-    iconSize: [30, 30], iconAnchor: [15, 15]
+// Ícone Usina no mapa de edição
+const usinaIconCrud = L.divIcon({
+    html: '<i class="fa-solid fa-industry" style="color: #fff; font-size: 20px; text-shadow: 0 2px 5px black;"></i>',
+    className: 'custom-div-icon', iconSize: [20, 20], iconAnchor: [10, 10]
 });
-L.marker(USINA_COORDS, { icon: usinaIcon }).addTo(map).bindPopup("<strong>USINA BEL</strong>").openPopup();
+L.marker(USINA_COORDS, { icon: usinaIconCrud }).addTo(map);
 
 map.pm.addControls({ position: 'topleft', drawCircle: false, drawMarker: false, drawPolyline: false, drawCircleMarker: false });
 map.pm.setLang('pt_br');
 
-// Zoom inteligente (Esconde rótulos de longe)
 map.on('zoomend', () => {
     const div = document.getElementById('map');
     if(map.getZoom() < 14) div.classList.add('hide-labels');
     else div.classList.remove('hide-labels');
 });
-// Estado inicial
 if(map.getZoom() < 14) document.getElementById('map').classList.add('hide-labels');
 
-
-// --- CARREGAR FORNECEDORES (PESQUISA) ---
+// --- CARREGAR FORNECEDORES ---
 async function loadOwnersForSelect() {
-    // Busca fornecedores ordenados alfabeticamente (conforme novo SQL)
     const { data } = await sb.rpc('get_fornecedores');
-    const dataList = document.getElementById('owners-list'); // O elemento <datalist>
+    const dataList = document.getElementById('owners-list');
     
     if(!data || !dataList) return;
     
-    dataList.innerHTML = ''; // Limpa opções antigas
+    dataList.innerHTML = ''; 
     data.forEach(o => {
         const opt = document.createElement('option');
-        // O valor é o nome (o que é salvo no banco da fazenda)
         opt.value = o.nome;
-        // O texto auxiliar mostra código e nome
         opt.label = `${o.cod_fornecedor || ''} - ${o.nome}`;
         dataList.appendChild(opt);
     });
 }
 
-// --- LÓGICA DE LAYER E RÓTULOS ---
+// --- LÓGICA DE LAYER ---
 function createLayerFromFeature(feature, isReadOnly) {
     if (!feature.properties) feature.properties = {};
     const calcArea = (turf.area(feature) / 10000);
-    // Usa manual se tiver, senão calculada
     let displayArea = feature.properties.area_manual ? parseFloat(feature.properties.area_manual) : calcArea;
     
-    // Limpa nome visualmente
     let rawName = feature.properties.talhao || '';
     let labelName = rawName.replace(/Talhão\s*|T-/yi, '').trim() || "?";
 
@@ -307,11 +422,9 @@ function createLayerFromFeature(feature, isReadOnly) {
     const layerId = L.stamp(layer);
     feature.properties.tempId = layerId;
 
-    // Rótulo Fixo
     const labelContent = `<div style="line-height:1;text-align:center;"><span style="font-size:14px;display:block;">${labelName}</span><span style="font-size:10px;opacity:0.9;">${displayArea.toFixed(2)} ha</span></div>`;
     layer.bindTooltip(labelContent, { permanent: true, direction: 'center', className: 'talhao-label', interactive: false });
 
-    // Popup de Edição (Só se não for ReadOnly)
     if (!isReadOnly) {
         const content = document.createElement('div');
         content.className = 'edit-popup-form';
@@ -321,7 +434,6 @@ function createLayerFromFeature(feature, isReadOnly) {
             <button id="bs-${layerId}" style="margin-top:5px;background:#10b981;color:#fff;border:0;padding:5px;cursor:pointer;border-radius:3px;">Ok</button>`;
         
         layer.bindPopup(content);
-        
         layer.on('popupopen', () => {
             const btn = document.getElementById(`bs-${layerId}`);
             if(btn) btn.onclick = () => {
@@ -329,8 +441,6 @@ function createLayerFromFeature(feature, isReadOnly) {
                 if(item) {
                     item.feature.properties.talhao = document.getElementById(`en-${layerId}`).value;
                     item.feature.properties.area_manual = parseFloat(document.getElementById(`ea-${layerId}`).value);
-                    
-                    // Atualiza visualmente
                     const newArea = item.feature.properties.area_manual;
                     layer.setTooltipContent(`<div style="line-height:1;text-align:center;"><span style="font-size:14px;display:block;">${item.feature.properties.talhao}</span><span style="font-size:10px;opacity:0.9;">${newArea.toFixed(2)} ha</span></div>`);
                     layer.closePopup();
@@ -347,7 +457,6 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
     const file = ev.target.files[0];
     if (!file) return;
     
-    // Se for cadastro novo, limpa mapa
     if(!editingFarmId) { currentLayerGroup.clearLayers(); currentFeaturesData = []; }
     
     try {
@@ -359,10 +468,8 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
 
         feats.forEach((f, idx) => {
             if(!f.geometry) return;
-            // Reprojeção
             const transform = (c) => (typeof c[0]==='number' && (Math.abs(c[0])>180||Math.abs(c[1])>90)) ? proj4("EPSG:32724","EPSG:4326",c) : (Array.isArray(c[0])?c.map(transform):c);
             f.geometry.coordinates = transform(f.geometry.coordinates);
-            
             f.properties.talhao = f.properties.Name || f.properties.TALHAO || `${idx+1}`;
             
             const res = createLayerFromFeature(f, false);
@@ -378,7 +485,6 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
     } catch(e) { alert('Erro SHP: '+e.message); }
 });
 
-// Botão Salvar
 elsMap.btnOpenSave.addEventListener('click', () => {
     if(!elsMap.inputCod.value || !elsMap.inputName.value || !elsMap.inputOwner.value) return showToast('Preencha campos obrigatórios', 'error');
     if(currentFeaturesData.length===0) return showToast('Mapa vazio', 'error');
@@ -440,14 +546,13 @@ function resetFarmForm() {
 }
 window.cancelEditFarm = function() { resetFarmForm(); }
 
-// --- CARREGAR FAZENDAS ---
 async function loadFarms() {
     elsMap.farmList.innerHTML = 'Carregando...';
     const { data } = await sb.rpc('get_farms');
     elsMap.farmList.innerHTML = '';
     
     currentLayerGroup.clearLayers();
-    const bounds = L.latLngBounds([USINA_COORDS]); // Começa limites na Usina
+    const bounds = L.latLngBounds([USINA_COORDS]);
 
     if(data && data.length > 0) {
         data.forEach(f => {
@@ -458,7 +563,7 @@ async function loadFarms() {
             d.querySelector('.v').onclick = () => viewFarm(f);
             elsMap.farmList.appendChild(d);
 
-            // Mapa (Visão Geral)
+            // Mapa (CRUD visualização de fundo)
             const feats = f.geojson.features || [f.geojson];
             feats.forEach(ft => {
                 const res = createLayerFromFeature(ft, true);
@@ -468,7 +573,6 @@ async function loadFarms() {
                 }
             });
         });
-        // Zoom para caber todas as fazendas + usina
         map.fitBounds(bounds, { padding: [50, 50] });
     } else {
         elsMap.farmList.innerHTML = 'Vazio';
@@ -477,7 +581,6 @@ async function loadFarms() {
 }
 
 function viewFarm(f) {
-    // Foca numa fazenda específica sem limpar as outras (apenas zoom)
     const tempGroup = L.featureGroup();
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => tempGroup.addLayer(L.geoJSON(ft)));
@@ -485,7 +588,6 @@ function viewFarm(f) {
 }
 
 function editFarm(f) {
-    // Entra modo edição
     currentLayerGroup.clearLayers(); currentFeaturesData = [];
     editingFarmId = f.id;
     elsMap.inputCod.value = f.cod_fazenda; elsMap.inputName.value = f.name; elsMap.inputOwner.value = f.owner;
@@ -494,7 +596,7 @@ function editFarm(f) {
     
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => {
-        const res = createLayerFromFeature(ft, false); // false = Editável
+        const res = createLayerFromFeature(ft, false); 
         if(res) { 
             currentLayerGroup.addLayer(res.layer); 
             currentFeaturesData.push({ layerId: res.layerId, feature: res.feature, layerInstance: res.layer }); 
@@ -514,6 +616,5 @@ function showToast(msg, type = 'success') {
 }
 document.getElementById('btn-close-modal').onclick = () => document.getElementById('modal-overlay').classList.add('hidden');
 
-// Init
-loadFarms();
-loadOwnersForSelect();
+// Init Dashboard ao abrir
+loadDashboardData();

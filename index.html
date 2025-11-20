@@ -5,22 +5,28 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BEL - AGRÍCOLA | Gestão</title>
 
-  <!-- Bibliotecas -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
-  <!-- CSS -->
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
-  <!-- MENU -->
   <nav id="main-nav">
     <div class="nav-brand"><i class="fa-solid fa-tractor"></i></div>
+    
     <div class="nav-group">
-      <label>MÓDULOS</label>
-      <button class="nav-btn active" onclick="switchView('fazendas')">
+      <button class="nav-btn active" onclick="switchView('dashboard')">
+        <i class="fa-solid fa-chart-pie"></i><span>Dashboard</span>
+      </button>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-group">
+      <label>CADASTROS</label>
+      <button class="nav-btn" onclick="switchView('fazendas')">
         <i class="fa-solid fa-map-location-dot"></i><span>Fazendas</span>
       </button>
       <button class="nav-btn" onclick="switchView('proprietarios')">
@@ -30,13 +36,44 @@
         <i class="fa-solid fa-users-gear"></i><span>Frentes</span>
       </button>
     </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-group">
+      <label>OPERACIONAL</label>
+      <button class="nav-btn" onclick="switchView('producao')">
+        <i class="fa-solid fa-boxes-stacked"></i><span>Produção</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('queima')">
+        <i class="fa-solid fa-fire"></i><span>Horas Queima</span>
+      </button>
+    </div>
   </nav>
 
-  <!-- CONTEÚDO -->
   <div id="content-area">
 
-    <!-- VIEW FAZENDAS -->
-    <div id="view-fazendas" class="view-section active">
+    <div id="view-dashboard" class="view-section active">
+      <div class="dashboard-container">
+        <div id="map-dashboard"></div>
+        
+        <div class="dashboard-overlay">
+          <div class="stats-card">
+            <h3><i class="fa-solid fa-chart-simple"></i> Visão Geral</h3>
+            <div class="total-area-box">
+              <span class="label">Área Total Cadastrada</span>
+              <span class="value" id="dash-total-area">0.00 ha</span>
+            </div>
+            
+            <h4>Top 5 Fornecedores (Área)</h4>
+            <ul id="dash-top5-list" class="top5-list">
+              <li>Carregando dados...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-fazendas" class="view-section hidden">
       <aside id="map-sidebar">
         <header><h2><i class="fa-solid fa-wheat"></i> Gestão de Fazendas</h2></header>
         
@@ -50,11 +87,8 @@
 
           <div class="form-group">
             <label>Proprietário (Pesquisar) *</label>
-            <!-- MUDANÇA AQUI: INPUT COM DATALIST PARA PESQUISA -->
             <input list="owners-list" id="input-owner" class="full-width" placeholder="Digite para buscar...">
-            <datalist id="owners-list">
-              <!-- Opções carregadas via JS -->
-            </datalist>
+            <datalist id="owners-list"></datalist>
             <small class="hint-link" onclick="switchView('proprietarios')">+ Cadastrar Novo</small>
           </div>
           
@@ -79,7 +113,6 @@
       <main id="map-container"><div id="map"></div></main>
     </div>
 
-    <!-- VIEW PROPRIETÁRIOS -->
     <div id="view-proprietarios" class="view-section hidden">
       <div class="crud-container">
         <header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header>
@@ -113,7 +146,6 @@
       </div>
     </div>
 
-    <!-- VIEW FRENTES -->
     <div id="view-frentes" class="view-section hidden">
       <div class="crud-container">
         <header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header>
@@ -143,9 +175,26 @@
       </div>
     </div>
 
+    <div id="view-producao" class="view-section hidden">
+      <div class="empty-state">
+        <i class="fa-solid fa-boxes-stacked fa-4x"></i>
+        <h2>Módulo de Produção</h2>
+        <p>Aqui você poderá lançar a produção de cada fazenda/talhão.</p>
+        <span class="badge-dev">Em Desenvolvimento</span>
+      </div>
+    </div>
+
+    <div id="view-queima" class="view-section hidden">
+      <div class="empty-state">
+        <i class="fa-solid fa-fire fa-4x"></i>
+        <h2>Controle de Queima</h2>
+        <p>Monitoramento de horas de queima por talhão.</p>
+        <span class="badge-dev">Em Desenvolvimento</span>
+      </div>
+    </div>
+
   </div>
 
-  <!-- MODAL -->
   <div id="modal-overlay" class="hidden">
     <div class="modal">
       <div class="modal-header"><h3 id="modal-title">Gerenciar Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div>
