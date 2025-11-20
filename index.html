@@ -6,20 +6,15 @@
   <title>AgroPlan — Gestão de Fazendas</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
-
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
     <aside id="sidebar">
       <header>
-        <div class="brand">
-          <i class="fa-solid fa-leaf"></i> AgroPlan
-        </div>
+        <div class="brand"><i class="fa-solid fa-leaf"></i> AgroPlan</div>
         <p class="sub">Gestão Inteligente de Áreas</p>
       </header>
 
@@ -38,38 +33,26 @@
           <input id="input-owner" type="text" placeholder="Nome do proprietário" />
         </div>
 
-        <div class="form-group">
-          <label>Talhão</label>
-          <input id="input-talhao" type="text" placeholder="Identificação do talhão" />
-        </div>
-
-        <div class="form-group row">
-          <div>
-            <label>Área (ha)</label>
-            <input id="input-area" type="number" step="0.01" placeholder="0.00" readonly />
-          </div>
-          <div class="file-input-wrapper">
-            <label>Importar Arquivo (.shp ou .zip)</label>
-            <label for="input-shp" class="btn-secondary">
-              <i class="fa-solid fa-upload"></i> Carregar
-            </label>
-            <input id="input-shp" type="file" accept=".zip,.shp" style="display:none" />
-          </div>
+        <div class="file-input-wrapper">
+          <label>Importar Shapefile (Vários Polígonos)</label>
+          <label for="input-shp" class="btn-secondary">
+            <i class="fa-solid fa-upload"></i> Carregar Arquivo (.shp/.zip)
+          </label>
+          <input id="input-shp" type="file" accept=".zip,.shp" style="display:none" />
         </div>
 
         <p class="hint">
-          <i class="fa-solid fa-info-circle"></i> Se usar .shp avulso, verifique se está em UTM 24S.
+          <i class="fa-solid fa-info-circle"></i> O sistema detectará automaticamente múltiplos talhões.
         </p>
 
         <div class="buttons">
-          <button id="btn-save" class="primary"><i class="fa-solid fa-floppy-disk"></i> Salvar Dados</button>
+          <button id="btn-open-save" class="primary"><i class="fa-solid fa-list-check"></i> Revisar & Salvar</button>
         </div>
       </section>
 
       <section class="card list-card">
         <h2>Fazendas Cadastradas</h2>
-        <div id="farm-list" class="farm-list">
-          </div>
+        <div id="farm-list" class="farm-list"></div>
       </section>
     </aside>
 
@@ -78,15 +61,44 @@
     </main>
   </div>
 
+  <div id="modal-overlay" class="hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Gerenciar Talhões</h3>
+        <button id="btn-close-modal" class="close-btn">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <div id="modal-summary" class="summary-box">
+          </div>
+        
+        <div class="table-container">
+          <table id="talhoes-table">
+            <thead>
+              <tr>
+                <th>Talhão #</th>
+                <th>Área (ha)</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="talhoes-tbody">
+              </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" id="modal-footer-actions">
+        </div>
+    </div>
+  </div>
+
   <div id="toast-container"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-
   <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
   
   <script>

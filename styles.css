@@ -1,14 +1,17 @@
+/* styles.css - Completo */
+
 :root {
-  --bg-dark: #0f172a;
-  --bg-card: #1e293b;
-  --primary: #10b981;
+  --bg-dark: #0f172a;      /* Fundo principal */
+  --bg-card: #1e293b;      /* Fundo dos cards e sidebar */
+  --primary: #10b981;      /* Verde destaque */
   --primary-hover: #059669;
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
+  --text-main: #f1f5f9;    /* Texto principal */
+  --text-muted: #94a3b8;   /* Texto secundário */
   --border: rgba(255, 255, 255, 0.08);
-  --danger: #ef4444;
+  --danger: #ef4444;       /* Cor de erro */
 }
 
+/* Reset básico */
 * { box-sizing: border-box; outline: none; }
 
 body {
@@ -26,7 +29,7 @@ body {
   width: 100%;
 }
 
-/* Sidebar */
+/* --- SIDEBAR --- */
 #sidebar {
   width: 380px;
   background: var(--bg-card);
@@ -55,7 +58,7 @@ body {
   font-size: 0.85rem;
 }
 
-/* Cards */
+/* --- CARDS E FORMULÁRIOS --- */
 .card {
   background: rgba(0,0,0,0.2);
   border: 1px solid var(--border);
@@ -74,7 +77,6 @@ body {
   gap: 8px;
 }
 
-/* Forms */
 .form-group { margin-bottom: 12px; }
 .form-group.row { display: flex; gap: 10px; align-items: flex-end; }
 
@@ -105,7 +107,7 @@ input[readonly] { background: rgba(255,255,255,0.05); cursor: default; }
   flex: 1;
 }
 
-/* Botões */
+/* --- BOTÕES --- */
 button, .btn-secondary {
   cursor: pointer;
   border: none;
@@ -142,7 +144,7 @@ button, .btn-secondary {
 
 .hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; }
 
-/* Lista de Fazendas */
+/* --- LISTA DE FAZENDAS --- */
 .farm-list {
   display: flex;
   flex-direction: column;
@@ -173,11 +175,11 @@ button, .btn-secondary {
 }
 .btn-icon:hover { color: var(--primary); background: rgba(255,255,255,0.05); }
 
-/* Mapa */
+/* --- MAPA --- */
 #map-container { flex: 1; position: relative; }
 #map { width: 100%; height: 100%; }
 
-/* Toast Notification */
+/* --- TOAST NOTIFICATION (Avisos flutuantes) --- */
 #toast-container {
   position: fixed;
   bottom: 20px;
@@ -208,9 +210,117 @@ button, .btn-secondary {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* Responsivo */
+/* --- MODAL (Janela de Talhões) --- */
+.hidden { display: none !important; }
+
+#modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: var(--bg-card);
+  width: 90%;
+  max-width: 600px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh; /* Limita altura na tela */
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 { margin: 0; color: var(--primary); font-size: 1.2rem; }
+
+.close-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 24px; cursor: pointer; padding: 0;
+}
+.close-btn:hover { color: #fff; }
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto; /* Rolagem se a lista for grande */
+}
+
+/* Resumo de área total no modal */
+.summary-box {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid var(--primary);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+/* --- TABELA --- */
+.table-container {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  vertical-align: middle;
+}
+
+/* Input dentro da tabela (para editar nome) */
+td input {
+  width: 100%;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+  padding: 6px;
+  color: white;
+  border-radius: 4px;
+}
+td input:focus { border-color: var(--primary); }
+
+tr:hover { background: rgba(255,255,255,0.02); }
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* --- RESPONSIVO --- */
 @media (max-width: 768px) {
   #app { flex-direction: column; }
   #sidebar { width: 100%; height: 50%; }
   #map-container { height: 50%; }
+  
+  /* Ajustes do modal em celular */
+  .modal { width: 95%; max-height: 90vh; }
 }

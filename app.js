@@ -1,277 +1,380 @@
 // app.js
 
-// Verifica configuração
 if (typeof APP_CONFIG === 'undefined') {
     console.error('ERRO: config.js ausente.');
-    alert('Erro de configuração: Verifique se config.js está carregado.');
+    alert('Erro de configuração.');
 }
 
-// Inicializa Supabase
 const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_KEY);
 
-// Define a projeção UTM 24S para conversão (EPSG:32724 -> WGS84)
 if (typeof proj4 !== 'undefined') {
     proj4.defs("EPSG:32724", "+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs");
 }
 
-// Elementos da Tela
+// Elementos
 const els = {
     inputName: document.getElementById('input-name'),
     inputOwner: document.getElementById('input-owner'),
-    inputTalhao: document.getElementById('input-talhao'),
-    inputArea: document.getElementById('input-area'),
     inputShp: document.getElementById('input-shp'),
-    btnSave: document.getElementById('btn-save'),
+    btnOpenSave: document.getElementById('btn-open-save'),
     farmList: document.getElementById('farm-list'),
+    // Modal
+    modalOverlay: document.getElementById('modal-overlay'),
+    modalTitle: document.getElementById('modal-title'),
+    btnCloseModal: document.getElementById('btn-close-modal'),
+    modalSummary: document.getElementById('modal-summary'),
+    tableBody: document.getElementById('talhoes-tbody'),
+    modalFooter: document.getElementById('modal-footer-actions')
 };
 
-let currentLayer = null; 
+// Variáveis de Estado
+let currentLayerGroup = L.featureGroup(); // Grupo para múltiplos polígonos
+let currentFeaturesData = []; // Array para guardar os dados temporários (GeoJSONs individuais) antes de salvar
+let isViewMode = false; // Se estamos vendo uma fazenda salva ou criando nova
 
-// --- 1. CONFIGURAÇÃO DO MAPA E CAMADAS (NOVO) ---
-
-// Camada: Google Satélite Híbrido (Satélite + Nomes de ruas/lugares)
-// lyrs=y (híbrido), lyrs=s (satélite puro), lyrs=m (mapa padrão)
+// --- MAPA E CAMADAS ---
 const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '© Google Maps'
 });
-
-// Camada: OpenStreetMap (Estradas limpo)
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
 });
 
-// Inicializa o mapa JA COM O SATÉLITE
 const map = L.map('map', {
-    center: [-12.97, -38.5], // Foco inicial (Bahia)
+    center: [-12.97, -38.5],
     zoom: 6,
-    layers: [googleSat] // <--- Define Google como padrão
+    layers: [googleSat]
 });
 
-// Adiciona controle para trocar de mapa (canto superior direito)
-const baseMaps = {
-    "Google Satélite": googleSat,
-    "Mapa de Estradas": osm
-};
-L.control.layers(baseMaps).addTo(map);
+L.control.layers({ "Google Satélite": googleSat, "Mapa de Estradas": osm }).addTo(map);
 
-// --- FIM DA CONFIGURAÇÃO DE CAMADAS ---
+// Adiciona o grupo de camadas ao mapa
+currentLayerGroup.addTo(map);
 
-// Geoman (Ferramentas de Desenho)
+// Configuração Geoman (para desenhar manualmente se precisar)
 map.pm.addControls({
     position: 'topleft',
-    drawCircle: false,
-    drawCircleMarker: false,
-    drawMarker: false,
-    drawPolyline: false,
-    drawRectangle: true,
-    drawPolygon: true,
-    editMode: true,
-    dragMode: false,
-    cutPolygon: false,
-    removalMode: true
+    drawCircle: false, drawCircleMarker: false, drawMarker: false, drawPolyline: false,
+    drawRectangle: true, drawPolygon: true, editMode: true, dragMode: false, cutPolygon: false, removalMode: true
 });
 map.pm.setLang('pt_br');
 
-// Layer de Fazendas Salvas (Visualização)
-const savedFarmsLayer = L.geoJSON(null, {
-    style: { 
-        color: '#00ffcc', // Cor ciano neon para destacar bem no satélite
-        weight: 3, 
-        fillOpacity: 0.15 
-    },
-    onEachFeature: (feature, layer) => {
-        const p = feature.properties;
-        layer.bindPopup(`<strong>${p.name}</strong><br>Talhão: ${p.talhao || '-'}<br>Área: ${p.area_ha} ha`);
-    }
-}).addTo(map);
-
-// Eventos Geoman (Ao desenhar/editar)
+// Evento de desenho manual (adiciona ao nosso array de features)
 map.on('pm:create', (e) => {
-    if (currentLayer && currentLayer !== e.layer) map.removeLayer(currentLayer);
-    currentLayer = e.layer;
-    setupLayerListeners(currentLayer);
-    calculateAndShowArea(currentLayer);
+    const layer = e.layer;
+    currentLayerGroup.addLayer(layer);
+    
+    // Adiciona aos dados temporários
+    const geo = layer.toGeoJSON();
+    geo.properties.tempId = L.stamp(layer); // ID temporário para linkar tabela <-> mapa
+    geo.properties.talhao = `T-${currentFeaturesData.length + 1}`; // Sugestão de nome
+    
+    currentFeaturesData.push({
+        layerId: L.stamp(layer),
+        feature: geo,
+        layerInstance: layer
+    });
+
+    layer.on('pm:edit', () => updateFeatureData(layer));
 });
 
-function setupLayerListeners(layer) {
-    layer.on('pm:edit', () => calculateAndShowArea(layer));
+function updateFeatureData(layer) {
+    const id = L.stamp(layer);
+    const index = currentFeaturesData.findIndex(f => f.layerId === id);
+    if (index !== -1) {
+        // Atualiza geometria
+        currentFeaturesData[index].feature = layer.toGeoJSON();
+        currentFeaturesData[index].feature.properties.tempId = id;
+    }
 }
 
-function calculateAndShowArea(layer) {
-    const geojson = layer.toGeoJSON();
-    const areaSqMeters = turf.area(geojson);
-    const areaHa = areaSqMeters / 10000;
-    els.inputArea.value = areaHa.toFixed(2);
-    return areaHa;
-}
-
-// --- FUNÇÃO: CONVERSOR UTM PARA LATLON ---
+// --- FUNÇÃO CONVERSOR UTM ---
 function reprojectFeature(feature) {
     const transformCoords = (coords) => {
-        // Se for um par de coordenadas [x, y]
         if (typeof coords[0] === 'number') {
-            const x = coords[0];
-            const y = coords[1];
-            
-            // Se X > 180, assume que é UTM (metros)
+            const x = coords[0], y = coords[1];
             if (Math.abs(x) > 180 || Math.abs(y) > 90) {
-                // Converte de UTM 24S para WGS84
                 return proj4("EPSG:32724", "EPSG:4326", [x, y]);
             }
             return coords; 
         }
-        // Recursivo para Arrays aninhados
         return coords.map(transformCoords);
     };
-
     const newFeature = JSON.parse(JSON.stringify(feature));
     newFeature.geometry.coordinates = transformCoords(newFeature.geometry.coordinates);
     return newFeature;
 }
 
-// Upload Shapefile
+// --- IMPORTAÇÃO SHP ---
 els.inputShp.addEventListener('change', async (ev) => {
-    if (typeof shp === 'undefined') return alert('Biblioteca shpjs não carregou.');
-    if (typeof proj4 === 'undefined') return alert('Biblioteca proj4 não carregou.');
-
+    if (typeof shp === 'undefined') return alert('Erro: shpjs não carregou.');
+    
     const file = ev.target.files[0];
     if (!file) return;
 
-    showToast('Processando e convertendo coordenadas...', 'info');
-    
+    showToast('Lendo arquivo com múltiplos talhões...', 'info');
+    currentLayerGroup.clearLayers();
+    currentFeaturesData = [];
+
     try {
         const arrayBuffer = await file.arrayBuffer();
         let geojson;
 
         if (file.name.toLowerCase().endsWith('.shp')) {
-            // Arquivo .shp puro
             const geometries = shp.parseShp(arrayBuffer);
-            if (!geometries || geometries.length === 0) throw new Error("Geometria vazia.");
-            geojson = {
-                type: "FeatureCollection",
-                features: geometries.map(geom => ({ type: "Feature", properties: {}, geometry: geom }))
-            };
+            geojson = { type: "FeatureCollection", features: geometries.map(g => ({ type: "Feature", properties: {}, geometry: g })) };
         } else {
-            // Arquivo .zip
             geojson = await shp(arrayBuffer);
         }
 
-        if (currentLayer) map.removeLayer(currentLayer);
-
-        // Normalização
-        let feature;
-        if (Array.isArray(geojson)) {
-            if (geojson.length > 0) feature = geojson[0];
+        // Normalizar para array de features
+        let featuresArray = [];
+        if (Array.isArray(geojson)) { // zip com múltiplos shps
+            geojson.forEach(g => featuresArray.push(...g.features));
+        } else if (geojson.type === 'FeatureCollection') {
+            featuresArray = geojson.features;
         } else {
-            feature = geojson;
-        }
-        
-        if (feature && feature.type === 'FeatureCollection' && feature.features.length > 0) {
-            feature = feature.features[0];
+            featuresArray = [geojson]; // Feature única
         }
 
-        if (!feature || !feature.geometry) throw new Error("Nenhuma geometria válida.");
+        // Processar cada feição
+        let count = 0;
+        featuresArray.forEach((f, index) => {
+            if (!f.geometry) return;
 
-        // Reprojeta de UTM 24S para Lat/Lon
-        const finalFeature = reprojectFeature(feature);
+            // Reprojetar UTM -> LatLon
+            const finalFeature = reprojectFeature(f);
+            
+            // Criar Layer Leaflet
+            const layer = L.geoJSON(finalFeature, {
+                style: { color: '#ffff00', weight: 2, fillOpacity: 0.2 }
+            }).getLayers()[0]; // Pega a camada interna do geoJSON group
 
-        currentLayer = L.geoJSON(finalFeature, {
-            style: { color: '#ffff00', weight: 4, opacity: 1, fillOpacity: 0.2 } // Amarelo forte para edição
-        }).getLayers()[0];
-        
-        currentLayer.addTo(map);
-        currentLayer.pm.enable(); 
-        
-        const bounds = currentLayer.getBounds();
-        if (bounds.isValid()) {
-            map.fitBounds(bounds);
+            if (!layer) return;
+
+            const layerId = L.stamp(layer);
+            
+            // Tenta pegar nome do DBF ou gera sequencial
+            let talhaoName = finalFeature.properties.Name || finalFeature.properties.NOME || finalFeature.properties.TALHAO || `Talhão ${index + 1}`;
+            
+            finalFeature.properties.talhao = talhaoName;
+            finalFeature.properties.tempId = layerId;
+
+            currentLayerGroup.addLayer(layer);
+            
+            // Salva na memória
+            currentFeaturesData.push({
+                layerId: layerId,
+                feature: finalFeature,
+                layerInstance: layer
+            });
+
+            // Evento de Highlight ao passar o mouse (futuro)
+            layer.on('mouseover', () => layer.setStyle({ weight: 4, fillOpacity: 0.5 }));
+            layer.on('mouseout', () => layer.setStyle({ weight: 2, fillOpacity: 0.2 }));
+            
+            count++;
+        });
+
+        if (count > 0) {
+            map.fitBounds(currentLayerGroup.getBounds());
+            showToast(`${count} talhões detectados! Clique em 'Revisar & Salvar'.`, 'success');
         } else {
-            showToast('Coordenadas inválidas mesmo após conversão.', 'error');
-        }
-
-        if (finalFeature.properties) {
-            els.inputName.value = finalFeature.properties.Name || finalFeature.properties.NOME || '';
+            showToast('Nenhum polígono válido encontrado.', 'error');
         }
         
-        calculateAndShowArea(currentLayer);
-        showToast('Importado com sucesso!', 'success');
-        ev.target.value = ''; 
+        // Preenche nome da fazenda se possível
+        if (featuresArray[0] && featuresArray[0].properties) {
+             const p = featuresArray[0].properties;
+             els.inputName.value = p.FAZENDA || p.FARM || els.inputName.value;
+        }
+
+        ev.target.value = '';
 
     } catch (err) {
-        console.error("Erro:", err);
-        showToast('Erro: ' + err.message, 'error');
+        console.error(err);
+        showToast('Erro ao ler arquivo: ' + err.message, 'error');
     }
 });
 
-// Salvar
-els.btnSave.addEventListener('click', async () => {
-    const name = els.inputName.value.trim();
-    if (!name) return showToast('Nome obrigatório.', 'error');
-    if (!currentLayer) return showToast('Sem área desenhada.', 'error');
+// --- SISTEMA DE MODAL ---
 
-    const geojson = currentLayer.toGeoJSON();
-    const area = els.inputArea.value;
+// Abrir Modal (para Salvar ou Visualizar)
+function openModal(mode) {
+    els.modalOverlay.classList.remove('hidden');
+    els.tableBody.innerHTML = '';
+    els.modalFooter.innerHTML = '';
+
+    let totalArea = 0;
+
+    if (mode === 'edit') {
+        // MODO EDIÇÃO (Antes de salvar)
+        els.modalTitle.textContent = 'Revisão de Talhões (Edição)';
+        isViewMode = false;
+
+        currentFeaturesData.forEach((item, idx) => {
+            // Calcula área atual
+            const areaHa = (turf.area(item.feature) / 10000);
+            totalArea += areaHa;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" value="${item.feature.properties.talhao}" data-id="${item.layerId}" class="input-talhao"></td>
+                <td>${areaHa.toFixed(2)} ha</td>
+                <td><button class="btn-icon" onclick="zoomToLayer(${item.layerId})"><i class="fa fa-eye"></i></button></td>
+            `;
+            
+            // Hover na tabela destaca mapa
+            tr.addEventListener('mouseenter', () => {
+                item.layerInstance.setStyle({ color: '#00ffcc', weight: 4, fillOpacity: 0.6 });
+            });
+            tr.addEventListener('mouseleave', () => {
+                item.layerInstance.setStyle({ color: '#ffff00', weight: 2, fillOpacity: 0.2 });
+            });
+
+            els.tableBody.appendChild(tr);
+        });
+
+        // Botão Final de Salvar
+        const btnSave = document.createElement('button');
+        btnSave.className = 'primary';
+        btnSave.innerHTML = '<i class="fa fa-save"></i> Confirmar e Salvar Fazenda';
+        btnSave.onclick = saveToDatabase;
+        els.modalFooter.appendChild(btnSave);
+
+    } else if (mode === 'view') {
+        // MODO VISUALIZAÇÃO (Somente leitura)
+        els.modalTitle.textContent = 'Detalhes da Fazenda';
+        isViewMode = true;
+
+        // "currentFeaturesData" aqui já foi carregado com dados do banco
+        currentFeaturesData.forEach(item => {
+            const areaHa = (turf.area(item.feature) / 10000);
+            totalArea += areaHa;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${item.feature.properties.talhao || 'Sem nome'}</strong></td>
+                <td>${areaHa.toFixed(2)} ha</td>
+                <td>-</td>
+            `;
+            els.tableBody.appendChild(tr);
+        });
+
+        const btnClose = document.createElement('button');
+        btnClose.textContent = 'Fechar';
+        btnClose.className = 'btn-secondary';
+        btnClose.onclick = closeModal;
+        els.modalFooter.appendChild(btnClose);
+    }
+
+    els.modalSummary.innerHTML = `ÁREA TOTAL DA FAZENDA: ${totalArea.toFixed(2)} Hectares`;
+}
+
+function closeModal() {
+    els.modalOverlay.classList.add('hidden');
+}
+els.btnCloseModal.addEventListener('click', closeModal);
+
+// Botão "Revisar e Salvar" da sidebar
+els.btnOpenSave.addEventListener('click', () => {
+    const name = els.inputName.value.trim();
+    if (!name) return showToast('Digite o nome da fazenda primeiro.', 'error');
+    if (currentFeaturesData.length === 0) return showToast('Nenhum talhão/polígono no mapa.', 'error');
+    openModal('edit');
+});
+
+// Zoom auxiliar
+window.zoomToLayer = function(id) {
+    const item = currentFeaturesData.find(f => f.layerId === id);
+    if (item) map.fitBounds(item.layerInstance.getBounds());
+};
+
+// --- SALVAR NO BANCO ---
+async function saveToDatabase() {
+    const name = els.inputName.value.trim();
+    const owner = els.inputOwner.value;
+    
+    // 1. Coletar nomes atualizados da tabela
+    const inputs = document.querySelectorAll('.input-talhao');
+    inputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const newVal = input.value;
+        const item = currentFeaturesData.find(f => f.layerId === id);
+        if (item) item.feature.properties.talhao = newVal;
+    });
+
+    // 2. Montar FeatureCollection final
+    const finalFeatures = currentFeaturesData.map(item => item.feature);
+    const featureCollection = {
+        type: "FeatureCollection",
+        features: finalFeatures
+    };
+
+    // 3. Calcular área total para salvar no registro principal
+    const totalArea = (turf.area(featureCollection) / 10000);
 
     const payload = {
         p_name: name,
-        p_owner: els.inputOwner.value,
-        p_talhao: els.inputTalhao.value,
-        p_area_ha: parseFloat(area),
-        p_geojson: geojson.geometry 
+        p_owner: owner,
+        p_talhao: 'Múltiplos', // Campo texto simples
+        p_area_ha: totalArea,
+        p_geojson: featureCollection // JSONB guarda tudo
     };
 
-    showToast('Salvando...', 'info');
+    showToast('Salvando no banco...', 'info');
+    closeModal();
 
     try {
         const { error } = await sb.rpc('insert_farm', payload);
         if (error) throw error;
 
-        showToast('Salvo com sucesso!', 'success');
-        resetForm();
-        loadFarms(); 
+        showToast('Fazenda e talhões salvos com sucesso!', 'success');
+        
+        // Limpar tudo
+        els.inputName.value = ''; els.inputOwner.value = '';
+        currentLayerGroup.clearLayers();
+        currentFeaturesData = [];
+        loadFarms(); // Recarrega lista lateral
+
     } catch (err) {
         console.error(err);
-        showToast('Erro ao salvar.', 'error');
+        showToast('Erro ao salvar: ' + err.message, 'error');
     }
-});
+}
 
-// Carregar
+// --- CARREGAR LISTA LATERAL ---
 async function loadFarms() {
     els.farmList.innerHTML = 'Carregando...';
     try {
         const { data, error } = await sb.rpc('get_farms');
         if (error) throw error;
 
-        savedFarmsLayer.clearLayers();
         els.farmList.innerHTML = '';
-
         if (!data || data.length === 0) {
             els.farmList.innerHTML = '<div style="padding:10px; text-align:center;">Nenhum registro.</div>';
             return;
         }
 
         data.forEach(farm => {
-            if (farm.geojson) {
-                savedFarmsLayer.addData({ type: 'Feature', properties: farm, geometry: farm.geojson });
-            }
             const item = document.createElement('div');
             item.className = 'farm-item';
             item.innerHTML = `
                 <div class="farm-info">
                     <strong>${farm.name}</strong>
-                    <div class="farm-meta">${farm.talhao ? 'T: '+farm.talhao : ''} • ${Number(farm.area_ha).toFixed(2)} ha</div>
+                    <div class="farm-meta">${Number(farm.area_ha).toFixed(2)} ha Total</div>
                 </div>
-                <button class="btn-icon"><i class="fa-solid fa-magnifying-glass-location"></i></button>
+                <button class="btn-icon" title="Ver Detalhes"><i class="fa-solid fa-list"></i></button>
             `;
+            
+            // CLICK NA LISTA: Carregar no Mapa e Abrir Tabela
             item.querySelector('button').addEventListener('click', () => {
-                if (farm.geojson) {
-                    const bounds = L.geoJSON(farm.geojson).getBounds();
-                    if (bounds.isValid()) map.fitBounds(bounds, { maxZoom: 17 }); // Zoom maior no satélite
-                }
+                viewFarmOnMap(farm);
             });
+
             els.farmList.appendChild(item);
         });
     } catch (err) {
@@ -279,9 +382,42 @@ async function loadFarms() {
     }
 }
 
-function resetForm() {
-    els.inputName.value = ''; els.inputOwner.value = ''; els.inputTalhao.value = ''; els.inputArea.value = '';
-    if (currentLayer) { map.removeLayer(currentLayer); currentLayer = null; }
+function viewFarmOnMap(farm) {
+    currentLayerGroup.clearLayers();
+    currentFeaturesData = []; // Reusamos essa var para o View Mode
+
+    if (!farm.geojson) return showToast('Erro: Geometria inválida.', 'error');
+
+    let features = [];
+    if (farm.geojson.type === 'FeatureCollection') {
+        features = farm.geojson.features;
+    } else {
+        features = [farm.geojson]; // Compatibilidade com dados antigos
+    }
+
+    // Adiciona ao mapa e prepara dados para modal
+    features.forEach(f => {
+        const layer = L.geoJSON(f, {
+            style: { color: '#00ffcc', weight: 2, fillOpacity: 0.3 }
+        }).getLayers()[0]; // Unwrap
+
+        if(layer) {
+            currentLayerGroup.addLayer(layer);
+            currentFeaturesData.push({
+                feature: f,
+                layerInstance: layer,
+                layerId: null // não precisa em view mode
+            });
+            
+            // Tooltip simples
+            layer.bindPopup(`Talhão: ${f.properties.talhao || '-'}<br>Area: ${(turf.area(f)/10000).toFixed(2)} ha`);
+        }
+    });
+
+    map.fitBounds(currentLayerGroup.getBounds());
+    
+    // Abre Modal com a tabela
+    openModal('view');
 }
 
 function showToast(msg, type = 'success') {
@@ -294,4 +430,5 @@ function showToast(msg, type = 'success') {
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
 }
 
+// Iniciar
 loadFarms();
