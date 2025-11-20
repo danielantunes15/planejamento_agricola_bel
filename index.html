@@ -49,7 +49,7 @@
             <input id="input-area" type="number" step="0.01" placeholder="0.00" readonly />
           </div>
           <div class="file-input-wrapper">
-            <label>Importar Shapefile (.zip)</label>
+            <label>Importar Arquivo (.shp ou .zip)</label>
             <label for="input-shp" class="btn-secondary">
               <i class="fa-solid fa-upload"></i> Carregar
             </label>
@@ -58,7 +58,7 @@
         </div>
 
         <p class="hint">
-          <i class="fa-solid fa-info-circle"></i> Use as ferramentas no mapa para desenhar ou editar a área.
+          <i class="fa-solid fa-info-circle"></i> Se usar .shp avulso, verifique se está em UTM 24S.
         </p>
 
         <div class="buttons">
@@ -83,11 +83,20 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="https://unpkg.com/shpjs@3.7.4/dist/shp.min.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+  
+  <script>
+    window.onload = function() {
+      if (typeof shp === 'undefined') console.error("SHPJS falhou.");
+      if (typeof proj4 === 'undefined') console.error("PROJ4 falhou.");
+    };
+  </script>
   
   <script src="config.js"></script>
-  
   <script src="app.js"></script>
 </body>
 </html>
