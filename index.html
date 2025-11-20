@@ -5,80 +5,62 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BEL - AGRÍCOLA | Gestão</title>
 
-  <!-- CSS de Bibliotecas -->
+  <!-- Bibliotecas -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
-  <!-- Seu CSS -->
+  <!-- CSS -->
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
-  <!-- MENU LATERAL -->
+  <!-- MENU -->
   <nav id="main-nav">
-    <div class="nav-brand">
-      <i class="fa-solid fa-tractor"></i>
-    </div>
-    
+    <div class="nav-brand"><i class="fa-solid fa-tractor"></i></div>
     <div class="nav-group">
       <label>MÓDULOS</label>
-      
       <button class="nav-btn active" onclick="switchView('fazendas')">
-        <i class="fa-solid fa-map-location-dot"></i>
-        <span>Fazendas (Mapa)</span>
+        <i class="fa-solid fa-map-location-dot"></i><span>Fazendas</span>
       </button>
-      
       <button class="nav-btn" onclick="switchView('proprietarios')">
-        <i class="fa-solid fa-user-tie"></i>
-        <span>Proprietários</span>
+        <i class="fa-solid fa-user-tie"></i><span>Proprietários</span>
       </button>
-      
       <button class="nav-btn" onclick="switchView('frentes')">
-        <i class="fa-solid fa-users-gear"></i>
-        <span>Frentes de Serviço</span>
+        <i class="fa-solid fa-users-gear"></i><span>Frentes</span>
       </button>
     </div>
   </nav>
 
-  <!-- ÁREA DE CONTEÚDO -->
+  <!-- CONTEÚDO -->
   <div id="content-area">
 
-    <!-- TELA A: FAZENDAS (Mapa) -->
-    <!-- Nota: Apenas esta tem 'active' inicial. As outras não têm 'hidden', o CSS cuida disso. -->
+    <!-- VIEW FAZENDAS -->
     <div id="view-fazendas" class="view-section active">
       <aside id="map-sidebar">
-        <header>
-          <h2><i class="fa-solid fa-wheat"></i> Gestão de Fazendas</h2>
-        </header>
+        <header><h2><i class="fa-solid fa-wheat"></i> Gestão de Fazendas</h2></header>
         
         <section class="card">
           <div class="card-header"><h3>Nova Fazenda</h3></div>
           
           <div class="form-group row">
-            <div style="flex: 1;">
-              <label>Cód. *</label>
-              <input id="input-cod" type="text" placeholder="001" />
-            </div>
-            <div style="flex: 2;">
-              <label>Nome *</label>
-              <input id="input-name" type="text" placeholder="Fazenda..." />
-            </div>
+            <div style="flex: 1;"><label>Cód. *</label><input id="input-cod" type="text" placeholder="001" /></div>
+            <div style="flex: 2;"><label>Nome *</label><input id="input-name" type="text" placeholder="Fazenda..." /></div>
           </div>
 
           <div class="form-group">
-            <label>Proprietário *</label>
-            <select id="input-owner" class="full-width">
-              <option value="">Carregando...</option>
-            </select>
+            <label>Proprietário (Pesquisar) *</label>
+            <!-- MUDANÇA AQUI: INPUT COM DATALIST PARA PESQUISA -->
+            <input list="owners-list" id="input-owner" class="full-width" placeholder="Digite para buscar...">
+            <datalist id="owners-list">
+              <!-- Opções carregadas via JS -->
+            </datalist>
             <small class="hint-link" onclick="switchView('proprietarios')">+ Cadastrar Novo</small>
           </div>
           
           <div class="file-input-wrapper">
-            <label>Shapefile (Talhões)</label>
-            <label for="input-shp" class="btn-secondary">
-              <i class="fa-solid fa-upload"></i> Carregar .shp/.zip
-            </label>
+            <label>Shapefile</label>
+            <label for="input-shp" class="btn-secondary"><i class="fa-solid fa-upload"></i> Carregar .shp/.zip</label>
             <input id="input-shp" type="file" accept=".zip,.shp" style="display:none" />
           </div>
 
@@ -94,21 +76,16 @@
         </section>
       </aside>
 
-      <main id="map-container">
-        <div id="map"></div>
-      </main>
+      <main id="map-container"><div id="map"></div></main>
     </div>
 
-    <!-- TELA B: PROPRIETÁRIOS -->
-    <div id="view-proprietarios" class="view-section">
+    <!-- VIEW PROPRIETÁRIOS -->
+    <div id="view-proprietarios" class="view-section hidden">
       <div class="crud-container">
-        <header class="crud-header">
-          <h2><i class="fa-solid fa-user-tie"></i> Cadastro de Proprietários</h2>
-        </header>
-        
+        <header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header>
         <div class="crud-body">
           <div class="card crud-form">
-            <h3>Novo / Editar Proprietário</h3>
+            <h3>Novo / Editar</h3>
             <input type="hidden" id="owner-id">
             <div class="form-group row">
               <div style="flex:1"><label>Cód.</label><input id="owner-cod" type="text"></div>
@@ -123,7 +100,6 @@
               <button class="btn-secondary" onclick="clearOwnerForm()">Limpar</button>
             </div>
           </div>
-
           <div class="card crud-list-container">
             <h3>Registros</h3>
             <div class="table-wrapper">
@@ -137,32 +113,28 @@
       </div>
     </div>
 
-    <!-- TELA C: FRENTES DE SERVIÇO -->
-    <div id="view-frentes" class="view-section">
+    <!-- VIEW FRENTES -->
+    <div id="view-frentes" class="view-section hidden">
       <div class="crud-container">
-        <header class="crud-header">
-          <h2><i class="fa-solid fa-users-gear"></i> Frentes de Serviço</h2>
-        </header>
-        
+        <header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header>
         <div class="crud-body">
           <div class="card crud-form">
-            <h3>Nova / Editar Frente</h3>
+            <h3>Novo / Editar</h3>
             <input type="hidden" id="front-id">
             <div class="form-group row">
-              <div style="flex:1"><label>Cód. Frente</label><input id="front-cod" type="text"></div>
-              <div style="flex:3"><label>Nome da Frente *</label><input id="front-name" type="text"></div>
+              <div style="flex:1"><label>Cód.</label><input id="front-cod" type="text"></div>
+              <div style="flex:3"><label>Nome *</label><input id="front-name" type="text"></div>
             </div>
             <div class="buttons">
               <button class="primary" onclick="saveFront()"><i class="fa-solid fa-save"></i> Salvar</button>
               <button class="btn-secondary" onclick="clearFrontForm()">Limpar</button>
             </div>
           </div>
-
           <div class="card crud-list-container">
             <h3>Registros</h3>
             <div class="table-wrapper">
               <table>
-                <thead><tr><th>Cód</th><th>Nome da Frente</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Cód</th><th>Nome</th><th>Ações</th></tr></thead>
                 <tbody id="front-list-body"></tbody>
               </table>
             </div>
@@ -176,27 +148,19 @@
   <!-- MODAL -->
   <div id="modal-overlay" class="hidden">
     <div class="modal">
-      <div class="modal-header">
-        <h3 id="modal-title">Gerenciar Talhões</h3>
-        <button id="btn-close-modal" class="close-btn">&times;</button>
-      </div>
+      <div class="modal-header"><h3 id="modal-title">Gerenciar Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div>
       <div class="modal-body">
         <div id="modal-summary" class="summary-box"></div>
         <div class="table-container">
-          <table id="talhoes-table">
-            <thead><tr><th>Talhão</th><th>Área (ha)</th><th>Ação</th></tr></thead>
-            <tbody id="talhoes-tbody"></tbody>
-          </table>
+          <table id="talhoes-table"><thead><tr><th>Talhão</th><th>Área (ha)</th><th>Ação</th></tr></thead><tbody id="talhoes-tbody"></tbody></table>
         </div>
       </div>
       <div class="modal-footer" id="modal-footer-actions"></div>
     </div>
   </div>
 
-  <!-- NOTIFICAÇÕES -->
   <div id="toast-container"></div>
 
-  <!-- SCRIPTS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
