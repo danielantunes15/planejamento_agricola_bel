@@ -3,19 +3,18 @@
 // Verifica configuração
 if (typeof APP_CONFIG === 'undefined') {
     console.error('ERRO: config.js ausente.');
-    alert('Erro de configuração.');
+    alert('Erro de configuração: Verifique se config.js está carregado.');
 }
 
 // Inicializa Supabase
 const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_KEY);
 
-// Define a projeção UTM 24S (SIRGAS 2000 / UTM zone 24S é compatível com WGS84 para web maps)
-// EPSG:32724
+// Define a projeção UTM 24S para conversão (EPSG:32724 -> WGS84)
 if (typeof proj4 !== 'undefined') {
     proj4.defs("EPSG:32724", "+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs");
 }
 
-// Elementos
+// Elementos da Tela
 const els = {
     inputName: document.getElementById('input-name'),
     inputOwner: document.getElementById('input-owner'),
@@ -28,15 +27,39 @@ const els = {
 
 let currentLayer = null; 
 
-// Inicializar Mapa
-const map = L.map('map').setView([-12.97, -38.5], 6); 
+// --- 1. CONFIGURAÇÃO DO MAPA E CAMADAS (NOVO) ---
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Camada: Google Satélite Híbrido (Satélite + Nomes de ruas/lugares)
+// lyrs=y (híbrido), lyrs=s (satélite puro), lyrs=m (mapa padrão)
+const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: '© Google Maps'
+});
+
+// Camada: OpenStreetMap (Estradas limpo)
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
-}).addTo(map);
+});
 
-// Geoman
+// Inicializa o mapa JA COM O SATÉLITE
+const map = L.map('map', {
+    center: [-12.97, -38.5], // Foco inicial (Bahia)
+    zoom: 6,
+    layers: [googleSat] // <--- Define Google como padrão
+});
+
+// Adiciona controle para trocar de mapa (canto superior direito)
+const baseMaps = {
+    "Google Satélite": googleSat,
+    "Mapa de Estradas": osm
+};
+L.control.layers(baseMaps).addTo(map);
+
+// --- FIM DA CONFIGURAÇÃO DE CAMADAS ---
+
+// Geoman (Ferramentas de Desenho)
 map.pm.addControls({
     position: 'topleft',
     drawCircle: false,
@@ -52,16 +75,20 @@ map.pm.addControls({
 });
 map.pm.setLang('pt_br');
 
-// Layer de Fazendas Salvas
+// Layer de Fazendas Salvas (Visualização)
 const savedFarmsLayer = L.geoJSON(null, {
-    style: { color: '#10b981', weight: 2, fillOpacity: 0.2 },
+    style: { 
+        color: '#00ffcc', // Cor ciano neon para destacar bem no satélite
+        weight: 3, 
+        fillOpacity: 0.15 
+    },
     onEachFeature: (feature, layer) => {
         const p = feature.properties;
         layer.bindPopup(`<strong>${p.name}</strong><br>Talhão: ${p.talhao || '-'}<br>Área: ${p.area_ha} ha`);
     }
 }).addTo(map);
 
-// Eventos Geoman
+// Eventos Geoman (Ao desenhar/editar)
 map.on('pm:create', (e) => {
     if (currentLayer && currentLayer !== e.layer) map.removeLayer(currentLayer);
     currentLayer = e.layer;
@@ -81,27 +108,25 @@ function calculateAndShowArea(layer) {
     return areaHa;
 }
 
-// --- FUNÇÃO MÁGICA: CONVERSOR UTM PARA LATLON ---
+// --- FUNÇÃO: CONVERSOR UTM PARA LATLON ---
 function reprojectFeature(feature) {
-    // Função recursiva para percorrer arrays aninhados de coordenadas (Polygon ou MultiPolygon)
     const transformCoords = (coords) => {
         // Se for um par de coordenadas [x, y]
         if (typeof coords[0] === 'number') {
             const x = coords[0];
             const y = coords[1];
             
-            // Lógica simples: Se X > 180, assumimos que é UTM (metros) e não Graus
+            // Se X > 180, assume que é UTM (metros)
             if (Math.abs(x) > 180 || Math.abs(y) > 90) {
-                // Converte de UTM 24S (EPSG:32724) para WGS84 (EPSG:4326)
+                // Converte de UTM 24S para WGS84
                 return proj4("EPSG:32724", "EPSG:4326", [x, y]);
             }
-            return coords; // Já está em lat/lon
+            return coords; 
         }
-        // Se for array de arrays, desce um nível
+        // Recursivo para Arrays aninhados
         return coords.map(transformCoords);
     };
 
-    // Clona a feature para não estragar a original
     const newFeature = JSON.parse(JSON.stringify(feature));
     newFeature.geometry.coordinates = transformCoords(newFeature.geometry.coordinates);
     return newFeature;
@@ -122,6 +147,7 @@ els.inputShp.addEventListener('change', async (ev) => {
         let geojson;
 
         if (file.name.toLowerCase().endsWith('.shp')) {
+            // Arquivo .shp puro
             const geometries = shp.parseShp(arrayBuffer);
             if (!geometries || geometries.length === 0) throw new Error("Geometria vazia.");
             geojson = {
@@ -129,6 +155,7 @@ els.inputShp.addEventListener('change', async (ev) => {
                 features: geometries.map(geom => ({ type: "Feature", properties: {}, geometry: geom }))
             };
         } else {
+            // Arquivo .zip
             geojson = await shp(arrayBuffer);
         }
 
@@ -148,12 +175,13 @@ els.inputShp.addEventListener('change', async (ev) => {
 
         if (!feature || !feature.geometry) throw new Error("Nenhuma geometria válida.");
 
-        // --- AQUI ACONTECE A MÁGICA ---
-        // Reprojeta de UTM 24S para Lat/Lon se necessário
+        // Reprojeta de UTM 24S para Lat/Lon
         const finalFeature = reprojectFeature(feature);
-        // ------------------------------
 
-        currentLayer = L.geoJSON(finalFeature).getLayers()[0];
+        currentLayer = L.geoJSON(finalFeature, {
+            style: { color: '#ffff00', weight: 4, opacity: 1, fillOpacity: 0.2 } // Amarelo forte para edição
+        }).getLayers()[0];
+        
         currentLayer.addTo(map);
         currentLayer.pm.enable(); 
         
@@ -169,7 +197,7 @@ els.inputShp.addEventListener('change', async (ev) => {
         }
         
         calculateAndShowArea(currentLayer);
-        showToast('Importado com sucesso (UTM 24S detectado)!', 'success');
+        showToast('Importado com sucesso!', 'success');
         ev.target.value = ''; 
 
     } catch (err) {
@@ -239,7 +267,10 @@ async function loadFarms() {
                 <button class="btn-icon"><i class="fa-solid fa-magnifying-glass-location"></i></button>
             `;
             item.querySelector('button').addEventListener('click', () => {
-                if (farm.geojson) map.fitBounds(L.geoJSON(farm.geojson).getBounds(), { maxZoom: 15 });
+                if (farm.geojson) {
+                    const bounds = L.geoJSON(farm.geojson).getBounds();
+                    if (bounds.isValid()) map.fitBounds(bounds, { maxZoom: 17 }); // Zoom maior no satélite
+                }
             });
             els.farmList.appendChild(item);
         });
