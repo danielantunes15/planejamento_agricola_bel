@@ -26,6 +26,7 @@ window.switchView = function(viewId) {
     // TRIGGERS
     if(viewId === 'dashboard') {
         loadDashboardData();
+        // Força redesenho do mapa
         if(mapDash) {
             mapDash.invalidateSize();
             setTimeout(() => { mapDash.invalidateSize(); }, 400);
@@ -55,34 +56,45 @@ window.toggleSubmenu = function(id) {
     }
 };
 
-// 3. DASHBOARD CONTROLLER (MODIFICADO PARA VISUAL CUSTOMIZADO)
+// 3. DASHBOARD CONTROLLER
 let mapDash = null;
 let layerGroupDash = null;
 
 async function loadDashboardData() {
     if(!mapDash) {
-        // CAMADA 1: Satélite Puro (lyrs=s) -> Aplicaremos classe CSS para escurecer
-        const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { 
-            maxZoom: 21, 
-            className: 'map-sat-dark' // Classe CSS definida no styles.css
-        });
+        // --- DEFINIÇÃO DE CAMADAS ---
+        
+        // 1. Modo Escuro (Composto: Satélite Escuro + Estradas Pretas)
+        const satDark = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 21, className: 'map-sat-dark' });
+        const roadsBlack = L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', { maxZoom: 21, className: 'map-roads-black', pane: 'shadowPane' });
+        const darkModeGroup = L.layerGroup([satDark, roadsBlack]);
 
-        // CAMADA 2: Apenas Estradas e Rótulos (lyrs=h) -> Aplicaremos classe CSS para inverter cor (Preto)
-        const roadsLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', { 
-            maxZoom: 21, 
-            className: 'map-roads-black', // Classe CSS definida no styles.css
-            pane: 'shadowPane' // Hack para garantir ordem de renderização se necessário (ou deixe padrão)
-        });
+        // 2. Satélite Padrão (Híbrido)
+        const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: 'Google' });
 
+        // 3. Mapa de Ruas Padrão
+        const googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: 'Google' });
+
+        // Inicializa mapa com o Modo Escuro por padrão
         mapDash = L.map('map-dashboard', { 
             center: USINA_COORDS, 
             zoom: 13, 
             zoomControl: false, 
-            layers: [satLayer, roadsLayer] // Carrega as duas camadas
+            layers: [darkModeGroup] 
         });
         
+        // Adiciona Controles
         L.control.zoom({ position: 'topright' }).addTo(mapDash);
         
+        // Controle de Camadas
+        const baseMaps = {
+            "Modo Escuro": darkModeGroup,
+            "Satélite (Google)": googleHybrid,
+            "Mapa (Google)": googleStreets
+        };
+        L.control.layers(baseMaps).addTo(mapDash);
+
+        // Ícone Usina
         const usinaIcon = L.divIcon({
             html: '<i class="fa-solid fa-industry" style="color: #fff; font-size: 26px; text-shadow: 0 2px 5px black;"></i>',
             className: 'custom-div-icon', iconSize: [30, 30], iconAnchor: [15, 15]
@@ -90,6 +102,19 @@ async function loadDashboardData() {
         L.marker(USINA_COORDS, { icon: usinaIcon }).addTo(mapDash).bindPopup("<strong>USINA BEL</strong>");
         
         layerGroupDash = L.featureGroup().addTo(mapDash);
+
+        // --- LÓGICA DE ZOOM PARA ESCONDER RÓTULOS ---
+        mapDash.on('zoomend', () => {
+            const div = document.getElementById('map-dashboard');
+            // Se zoom for menor que 14, esconde os rótulos
+            if(mapDash.getZoom() < 14) {
+                div.classList.add('hide-labels');
+            } else {
+                div.classList.remove('hide-labels');
+            }
+        });
+        // Dispara uma vez ao iniciar para garantir o estado correto
+        if(mapDash.getZoom() < 14) document.getElementById('map-dashboard').classList.add('hide-labels');
     }
 
     setTimeout(() => { mapDash.invalidateSize(); }, 200);
@@ -114,21 +139,21 @@ async function loadDashboardData() {
 
         const feats = f.geojson.features || [f.geojson];
         feats.forEach(ft => {
-             // ESTILO DESTAQUE (HIGH CONTRAST)
              const layer = L.geoJSON(ft, { 
                  style: { 
-                     color: '#34d399',      // Borda Verde Neon Claro
-                     weight: 2,             // Borda mais grossa
-                     fillColor: '#10b981',  // Preenchimento Verde Padrão
-                     fillOpacity: 0.5       // Mais opaco para brilhar no fundo escuro
+                     color: '#34d399',      
+                     weight: 2,             
+                     fillColor: '#10b981',  
+                     fillOpacity: 0.5       
                  } 
              });
              
              let labelName = (ft.properties.talhao || '').replace(/Talhão\s*|T-/yi, '').trim();
-             // Tooltip Permanente para destacar o nome
+             
+             // Tooltip Permanente (controlado pelo zoom via CSS)
              layer.bindTooltip(
                  `<span style="font-weight:900; text-shadow: 0 0 3px #000;">${labelName}</span>`, 
-                 { direction:'center', className: 'talhao-label', permanent: true } // Permanent true para ver sempre
+                 { direction:'center', className: 'talhao-label', permanent: true }
              );
              
              layerGroupDash.addLayer(layer);
