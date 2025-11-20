@@ -216,3 +216,27 @@ button:hover { opacity: 0.9; }
   .filter-controls { flex-direction: column; width: 100%; }
   .filter-controls input { width: 100% !important; }
 }
+
+/* ... Mantenha todo o CSS anterior ... */
+
+/* --- ESTILIZAÇÃO AVANÇADA DO MAPA DASHBOARD --- */
+
+/* 1. Camada de Satélite (Fundo) */
+.map-sat-dark {
+  /* Diminui brilho (0.4), tira um pouco da saturação (0.2) e aumenta contraste */
+  filter: brightness(0.4) grayscale(0.2) contrast(1.1) !important;
+}
+
+/* 2. Camada de Estradas (Sobreposição) */
+.map-roads-black {
+  /* Inverte as cores (Branco vira Preto) e ajusta contraste */
+  filter: invert(1) brightness(0.8) contrast(1.5) hue-rotate(180deg) !important;
+  opacity: 0.7; /* Um pouco de transparência para fundir com o terreno */
+}
+
+/* 3. Estilo das Fazendas no Dashboard (Destaque Neon) */
+/* Isso será controlado via JS, mas garantimos que o SVG tenha z-index alto */
+.leaflet-overlay-pane path {
+  /* Garante transição suave ao passar o mouse se quiser adicionar hover depois */
+  transition: stroke-width 0.2s, fill-opacity 0.2s;
+}

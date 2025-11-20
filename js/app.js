@@ -23,29 +23,20 @@ window.switchView = function(viewId) {
     const view = document.getElementById(`view-${viewId}`);
     if(view) view.classList.add('active');
 
-    // --- CORREÇÃO DO MAPA AQUI ---
+    // TRIGGERS
     if(viewId === 'dashboard') {
         loadDashboardData();
-        
-        // Força o mapa a recalcular o tamanho
         if(mapDash) {
-            // Executa imediatamente
             mapDash.invalidateSize();
-            
-            // E executa novamente após um breve momento para garantir
-            setTimeout(() => { 
-                mapDash.invalidateSize(); 
-            }, 400);
+            setTimeout(() => { mapDash.invalidateSize(); }, 400);
         }
     }
     
     if(viewId === 'lista-fazendas') if(typeof loadFarmsTable === 'function') loadFarmsTable();
-    
     if(viewId === 'fazendas') {
         if(typeof initFazendasMap === 'function') initFazendasMap(); 
         if(typeof loadOwnersForSelect === 'function') loadOwnersForSelect();
     }
-
     if(viewId === 'proprietarios') if(typeof loadOwnersList === 'function') loadOwnersList();
     if(viewId === 'frentes') if(typeof loadFrontsList === 'function') loadFrontsList();
 };
@@ -64,15 +55,32 @@ window.toggleSubmenu = function(id) {
     }
 };
 
-// 3. DASHBOARD CONTROLLER
+// 3. DASHBOARD CONTROLLER (MODIFICADO PARA VISUAL CUSTOMIZADO)
 let mapDash = null;
 let layerGroupDash = null;
 
 async function loadDashboardData() {
     if(!mapDash) {
-        const googleSat = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: 'Google' });
+        // CAMADA 1: Satélite Puro (lyrs=s) -> Aplicaremos classe CSS para escurecer
+        const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { 
+            maxZoom: 21, 
+            className: 'map-sat-dark' // Classe CSS definida no styles.css
+        });
+
+        // CAMADA 2: Apenas Estradas e Rótulos (lyrs=h) -> Aplicaremos classe CSS para inverter cor (Preto)
+        const roadsLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}', { 
+            maxZoom: 21, 
+            className: 'map-roads-black', // Classe CSS definida no styles.css
+            pane: 'shadowPane' // Hack para garantir ordem de renderização se necessário (ou deixe padrão)
+        });
+
+        mapDash = L.map('map-dashboard', { 
+            center: USINA_COORDS, 
+            zoom: 13, 
+            zoomControl: false, 
+            layers: [satLayer, roadsLayer] // Carrega as duas camadas
+        });
         
-        mapDash = L.map('map-dashboard', { center: USINA_COORDS, zoom: 13, zoomControl: false, layers: [googleSat] });
         L.control.zoom({ position: 'topright' }).addTo(mapDash);
         
         const usinaIcon = L.divIcon({
@@ -80,10 +88,10 @@ async function loadDashboardData() {
             className: 'custom-div-icon', iconSize: [30, 30], iconAnchor: [15, 15]
         });
         L.marker(USINA_COORDS, { icon: usinaIcon }).addTo(mapDash).bindPopup("<strong>USINA BEL</strong>");
+        
         layerGroupDash = L.featureGroup().addTo(mapDash);
     }
 
-    // Garante redimensionamento ao carregar dados
     setTimeout(() => { mapDash.invalidateSize(); }, 200);
 
     const listEl = document.getElementById('dash-top5-list');
@@ -106,9 +114,23 @@ async function loadDashboardData() {
 
         const feats = f.geojson.features || [f.geojson];
         feats.forEach(ft => {
-             const layer = L.geoJSON(ft, { style: { color: '#10b981', weight: 1, fillOpacity: 0.4 } });
+             // ESTILO DESTAQUE (HIGH CONTRAST)
+             const layer = L.geoJSON(ft, { 
+                 style: { 
+                     color: '#34d399',      // Borda Verde Neon Claro
+                     weight: 2,             // Borda mais grossa
+                     fillColor: '#10b981',  // Preenchimento Verde Padrão
+                     fillOpacity: 0.5       // Mais opaco para brilhar no fundo escuro
+                 } 
+             });
+             
              let labelName = (ft.properties.talhao || '').replace(/Talhão\s*|T-/yi, '').trim();
-             layer.bindTooltip(`${labelName}`, { direction:'center', className: 'talhao-label', permanent: false });
+             // Tooltip Permanente para destacar o nome
+             layer.bindTooltip(
+                 `<span style="font-weight:900; text-shadow: 0 0 3px #000;">${labelName}</span>`, 
+                 { direction:'center', className: 'talhao-label', permanent: true } // Permanent true para ver sempre
+             );
+             
              layerGroupDash.addLayer(layer);
              if(layer.getBounds().isValid()) bounds.extend(layer.getBounds());
         });
@@ -144,9 +166,6 @@ window.showToast = function(msg, type = 'success') {
 }
 document.getElementById('btn-close-modal').onclick = () => document.getElementById('modal-overlay').classList.add('hidden');
 
-// Listener para redimensionamento da janela
-window.addEventListener('resize', () => {
-    if(mapDash) mapDash.invalidateSize();
-});
+window.addEventListener('resize', () => { if(mapDash) mapDash.invalidateSize(); });
 
 loadDashboardData();
