@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AgroPlan — Gestão de Fazendas</title>
+  <title>BEL - AGRÍCOLA</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
@@ -14,8 +14,8 @@
   <div id="app">
     <aside id="sidebar">
       <header>
-        <div class="brand"><i class="fa-solid fa-leaf"></i> AgroPlan</div>
-        <p class="sub">Gestão Inteligente de Áreas</p>
+        <div class="brand"><i class="fa-solid fa-tractor"></i> BEL - AGRÍCOLA</div>
+        <p class="sub">Sistema de Gestão Rural</p>
       </header>
 
       <section class="card">
@@ -23,18 +23,24 @@
           <h2><i class="fa-solid fa-plus-circle"></i> Nova Fazenda</h2>
         </div>
 
-        <div class="form-group">
-          <label>Nome da Fazenda *</label>
-          <input id="input-name" type="text" placeholder="Ex: Fazenda Santa Fé" />
+        <div class="form-group row">
+          <div style="flex: 1;">
+            <label>Cód. Fazenda *</label>
+            <input id="input-cod" type="text" placeholder="Ex: 001" />
+          </div>
+          <div style="flex: 2;">
+            <label>Nome da Fazenda *</label>
+            <input id="input-name" type="text" placeholder="Ex: Santa Fé" />
+          </div>
         </div>
 
         <div class="form-group">
-          <label>Proprietário</label>
+          <label>Proprietário *</label>
           <input id="input-owner" type="text" placeholder="Nome do proprietário" />
         </div>
-
+        
         <div class="file-input-wrapper">
-          <label>Importar Shapefile (Vários Polígonos)</label>
+          <label>Importar Shapefile (Talhões)</label>
           <label for="input-shp" class="btn-secondary">
             <i class="fa-solid fa-upload"></i> Carregar Arquivo (.shp/.zip)
           </label>
@@ -69,26 +75,23 @@
       </div>
       
       <div class="modal-body">
-        <div id="modal-summary" class="summary-box">
-          </div>
+        <div id="modal-summary" class="summary-box"></div>
         
         <div class="table-container">
           <table id="talhoes-table">
             <thead>
               <tr>
-                <th>Talhão #</th>
+                <th>Talhão / Identificação</th>
                 <th>Área (ha)</th>
                 <th>Ação</th>
               </tr>
             </thead>
-            <tbody id="talhoes-tbody">
-              </tbody>
+            <tbody id="talhoes-tbody"></tbody>
           </table>
         </div>
       </div>
 
-      <div class="modal-footer" id="modal-footer-actions">
-        </div>
+      <div class="modal-footer" id="modal-footer-actions"></div>
     </div>
   </div>
 

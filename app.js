@@ -1,24 +1,33 @@
-// app.js
+// app.js - BEL AGRÍCOLA (Versão Completa)
 
+// 1. VERIFICAÇÃO DE CONFIGURAÇÃO
 if (typeof APP_CONFIG === 'undefined') {
-    console.error('ERRO: config.js ausente.');
-    alert('Erro de configuração.');
+    console.error('ERRO CRÍTICO: Arquivo config.js não foi carregado.');
+    alert('Erro de configuração: O arquivo config.js não foi encontrado. Verifique o console.');
 }
 
+// 2. INICIALIZAÇÃO DO SUPABASE
 const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_KEY);
 
+// 3. DEFINIÇÃO DE PROJEÇÃO (UTM 24S -> WGS84)
+// Necessário para converter coordenadas do QGIS para o Mapa Web
 if (typeof proj4 !== 'undefined') {
     proj4.defs("EPSG:32724", "+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs");
 }
 
-// Elementos
+// 4. ELEMENTOS DO DOM
 const els = {
+    // Formulário
+    inputCod: document.getElementById('input-cod'),   // Novo campo: Código
     inputName: document.getElementById('input-name'),
     inputOwner: document.getElementById('input-owner'),
     inputShp: document.getElementById('input-shp'),
     btnOpenSave: document.getElementById('btn-open-save'),
+    
+    // Listagem
     farmList: document.getElementById('farm-list'),
-    // Modal
+    
+    // Modal (Janela Flutuante)
     modalOverlay: document.getElementById('modal-overlay'),
     modalTitle: document.getElementById('modal-title'),
     btnCloseModal: document.getElementById('btn-close-modal'),
@@ -27,95 +36,137 @@ const els = {
     modalFooter: document.getElementById('modal-footer-actions')
 };
 
-// Variáveis de Estado
-let currentLayerGroup = L.featureGroup(); // Grupo para múltiplos polígonos
-let currentFeaturesData = []; // Array para guardar os dados temporários (GeoJSONs individuais) antes de salvar
-let isViewMode = false; // Se estamos vendo uma fazenda salva ou criando nova
+// 5. VARIÁVEIS DE ESTADO GLOBAL
+let currentLayerGroup = L.featureGroup(); // Grupo de camadas no mapa
+let currentFeaturesData = [];             // Dados temporários dos talhões
+let isViewMode = false;                   // Flag: estamos vendo ou editando?
 
-// --- MAPA E CAMADAS ---
+// 6. CONFIGURAÇÃO DO MAPA E CAMADAS
+// Camada Satélite do Google
 const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '© Google Maps'
 });
+
+// Camada Estradas (OpenStreetMap)
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
 });
 
+// Inicializa Mapa (Foco Bahia)
 const map = L.map('map', {
     center: [-12.97, -38.5],
     zoom: 6,
-    layers: [googleSat]
+    layers: [googleSat] // Padrão: Satélite
 });
 
-L.control.layers({ "Google Satélite": googleSat, "Mapa de Estradas": osm }).addTo(map);
+// Controle de Camadas (Canto superior direito)
+L.control.layers({ 
+    "Google Satélite": googleSat, 
+    "Mapa de Estradas": osm 
+}).addTo(map);
 
-// Adiciona o grupo de camadas ao mapa
+// Adiciona o grupo de camadas de desenho ao mapa
 currentLayerGroup.addTo(map);
 
-// Configuração Geoman (para desenhar manualmente se precisar)
+// 7. CONFIGURAÇÃO DO GEOMAN (Ferramentas de Desenho)
 map.pm.addControls({
     position: 'topleft',
-    drawCircle: false, drawCircleMarker: false, drawMarker: false, drawPolyline: false,
-    drawRectangle: true, drawPolygon: true, editMode: true, dragMode: false, cutPolygon: false, removalMode: true
+    drawCircle: false,
+    drawCircleMarker: false,
+    drawMarker: false,
+    drawPolyline: false,
+    drawRectangle: true,
+    drawPolygon: true,
+    editMode: true,
+    dragMode: false,
+    cutPolygon: false,
+    removalMode: true
 });
 map.pm.setLang('pt_br');
 
-// Evento de desenho manual (adiciona ao nosso array de features)
+// 8. EVENTOS DE DESENHO MANUAL
+// (Caso o usuário desenhe no mapa em vez de importar arquivo)
 map.on('pm:create', (e) => {
     const layer = e.layer;
     currentLayerGroup.addLayer(layer);
     
-    // Adiciona aos dados temporários
     const geo = layer.toGeoJSON();
-    geo.properties.tempId = L.stamp(layer); // ID temporário para linkar tabela <-> mapa
-    geo.properties.talhao = `T-${currentFeaturesData.length + 1}`; // Sugestão de nome
+    const uniqueId = L.stamp(layer);
     
+    // Define propriedades padrão
+    geo.properties.tempId = uniqueId;
+    geo.properties.talhao = `T-${currentFeaturesData.length + 1}`; // Nome sugerido
+
+    // Salva no array de dados
     currentFeaturesData.push({
-        layerId: L.stamp(layer),
+        layerId: uniqueId,
         feature: geo,
         layerInstance: layer
     });
 
+    // Listener para atualizar dados se o usuário editar o desenho
     layer.on('pm:edit', () => updateFeatureData(layer));
 });
 
+// Atualiza o GeoJSON na memória quando o desenho é editado no mapa
 function updateFeatureData(layer) {
     const id = L.stamp(layer);
     const index = currentFeaturesData.findIndex(f => f.layerId === id);
     if (index !== -1) {
-        // Atualiza geometria
         currentFeaturesData[index].feature = layer.toGeoJSON();
         currentFeaturesData[index].feature.properties.tempId = id;
+        // Mantém o nome do talhão que já estava
+        const oldName = currentFeaturesData[index].feature.properties.talhao;
+        if (oldName) currentFeaturesData[index].feature.properties.talhao = oldName;
     }
 }
 
-// --- FUNÇÃO CONVERSOR UTM ---
+// 9. FUNÇÃO DE REPROJEÇÃO (UTM -> LAT/LON)
 function reprojectFeature(feature) {
+    // Função recursiva para percorrer coordenadas profundas (ex: MultiPolygon)
     const transformCoords = (coords) => {
+        // Se for par de coordenadas [x, y]
         if (typeof coords[0] === 'number') {
-            const x = coords[0], y = coords[1];
+            const x = coords[0];
+            const y = coords[1];
+            
+            // Lógica de detecção: Se X > 180, provavelmente é UTM (metros)
             if (Math.abs(x) > 180 || Math.abs(y) > 90) {
-                return proj4("EPSG:32724", "EPSG:4326", [x, y]);
+                try {
+                    // Converte EPSG:32724 (UTM 24S) para EPSG:4326 (LatLon)
+                    return proj4("EPSG:32724", "EPSG:4326", [x, y]);
+                } catch (e) {
+                    console.warn("Erro na conversão de ponto", e);
+                    return coords;
+                }
             }
-            return coords; 
+            return coords; // Já está em LatLon
         }
         return coords.map(transformCoords);
     };
+
+    // Clona e transforma
     const newFeature = JSON.parse(JSON.stringify(feature));
     newFeature.geometry.coordinates = transformCoords(newFeature.geometry.coordinates);
     return newFeature;
 }
 
-// --- IMPORTAÇÃO SHP ---
+// 10. IMPORTAÇÃO DE ARQUIVO (SHP ou ZIP)
 els.inputShp.addEventListener('change', async (ev) => {
-    if (typeof shp === 'undefined') return alert('Erro: shpjs não carregou.');
+    if (typeof shp === 'undefined') {
+        alert('ERRO: Biblioteca shpjs não carregou. Verifique sua internet.');
+        return;
+    }
     
     const file = ev.target.files[0];
     if (!file) return;
 
-    showToast('Lendo arquivo com múltiplos talhões...', 'info');
+    showToast('Lendo e processando arquivo...', 'info');
+    
+    // Limpa mapa atual
     currentLayerGroup.clearLayers();
     currentFeaturesData = [];
 
@@ -123,16 +174,23 @@ els.inputShp.addEventListener('change', async (ev) => {
         const arrayBuffer = await file.arrayBuffer();
         let geojson;
 
+        // Verifica extensão
         if (file.name.toLowerCase().endsWith('.shp')) {
+            // Arquivo .shp solto
             const geometries = shp.parseShp(arrayBuffer);
-            geojson = { type: "FeatureCollection", features: geometries.map(g => ({ type: "Feature", properties: {}, geometry: g })) };
+            geojson = { 
+                type: "FeatureCollection", 
+                features: geometries.map(g => ({ type: "Feature", properties: {}, geometry: g })) 
+            };
         } else {
+            // Arquivo .zip
             geojson = await shp(arrayBuffer);
         }
 
-        // Normalizar para array de features
+        // Normaliza para garantir que temos um array de features
         let featuresArray = [];
-        if (Array.isArray(geojson)) { // zip com múltiplos shps
+        if (Array.isArray(geojson)) { 
+            // Zip pode conter múltiplos shapefiles
             geojson.forEach(g => featuresArray.push(...g.features));
         } else if (geojson.type === 'FeatureCollection') {
             featuresArray = geojson.features;
@@ -140,39 +198,40 @@ els.inputShp.addEventListener('change', async (ev) => {
             featuresArray = [geojson]; // Feature única
         }
 
-        // Processar cada feição
         let count = 0;
         featuresArray.forEach((f, index) => {
             if (!f.geometry) return;
 
-            // Reprojetar UTM -> LatLon
+            // 1. Reprojetar
             const finalFeature = reprojectFeature(f);
             
-            // Criar Layer Leaflet
+            // 2. Criar Camada Leaflet
             const layer = L.geoJSON(finalFeature, {
-                style: { color: '#ffff00', weight: 2, fillOpacity: 0.2 }
-            }).getLayers()[0]; // Pega a camada interna do geoJSON group
+                style: { color: '#ffff00', weight: 2, fillOpacity: 0.2 } // Amarelo para novos
+            }).getLayers()[0]; // Extrai a layer interna
 
             if (!layer) return;
 
             const layerId = L.stamp(layer);
             
-            // Tenta pegar nome do DBF ou gera sequencial
-            let talhaoName = finalFeature.properties.Name || finalFeature.properties.NOME || finalFeature.properties.TALHAO || `Talhão ${index + 1}`;
+            // 3. Tentar adivinhar nome do talhão
+            let talhaoName = finalFeature.properties.Name || 
+                             finalFeature.properties.NOME || 
+                             finalFeature.properties.TALHAO || 
+                             `Talhão ${index + 1}`;
             
             finalFeature.properties.talhao = talhaoName;
             finalFeature.properties.tempId = layerId;
 
+            // 4. Adicionar ao mapa e aos dados
             currentLayerGroup.addLayer(layer);
-            
-            // Salva na memória
             currentFeaturesData.push({
                 layerId: layerId,
                 feature: finalFeature,
                 layerInstance: layer
             });
-
-            // Evento de Highlight ao passar o mouse (futuro)
+            
+            // Efeito visual ao passar mouse
             layer.on('mouseover', () => layer.setStyle({ weight: 4, fillOpacity: 0.5 }));
             layer.on('mouseout', () => layer.setStyle({ weight: 2, fillOpacity: 0.2 }));
             
@@ -181,18 +240,19 @@ els.inputShp.addEventListener('change', async (ev) => {
 
         if (count > 0) {
             map.fitBounds(currentLayerGroup.getBounds());
-            showToast(`${count} talhões detectados! Clique em 'Revisar & Salvar'.`, 'success');
+            showToast(`${count} talhões/polígonos detectados!`, 'success');
         } else {
             showToast('Nenhum polígono válido encontrado.', 'error');
         }
         
-        // Preenche nome da fazenda se possível
+        // Tenta preencher nome da fazenda se vier no shapefile
         if (featuresArray[0] && featuresArray[0].properties) {
              const p = featuresArray[0].properties;
-             els.inputName.value = p.FAZENDA || p.FARM || els.inputName.value;
+             const possibleName = p.FAZENDA || p.FARM || p.PROPRIEDADE;
+             if (possibleName) els.inputName.value = possibleName;
         }
 
-        ev.target.value = '';
+        ev.target.value = ''; // Reseta input
 
     } catch (err) {
         console.error(err);
@@ -200,57 +260,55 @@ els.inputShp.addEventListener('change', async (ev) => {
     }
 });
 
-// --- SISTEMA DE MODAL ---
+// 11. SISTEMA DE MODAL (Janela de Edição/Visualização)
 
-// Abrir Modal (para Salvar ou Visualizar)
 function openModal(mode) {
     els.modalOverlay.classList.remove('hidden');
     els.tableBody.innerHTML = '';
     els.modalFooter.innerHTML = '';
-
     let totalArea = 0;
 
     if (mode === 'edit') {
-        // MODO EDIÇÃO (Antes de salvar)
-        els.modalTitle.textContent = 'Revisão de Talhões (Edição)';
+        // --- MODO EDIÇÃO (Antes de Salvar) ---
+        els.modalTitle.textContent = 'Revisão e Cadastro';
         isViewMode = false;
 
-        currentFeaturesData.forEach((item, idx) => {
-            // Calcula área atual
+        currentFeaturesData.forEach((item) => {
             const areaHa = (turf.area(item.feature) / 10000);
             totalArea += areaHa;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><input type="text" value="${item.feature.properties.talhao}" data-id="${item.layerId}" class="input-talhao"></td>
+                <td>
+                    <input type="text" value="${item.feature.properties.talhao}" data-id="${item.layerId}" class="input-talhao" placeholder="Nome do Talhão">
+                </td>
                 <td>${areaHa.toFixed(2)} ha</td>
-                <td><button class="btn-icon" onclick="zoomToLayer(${item.layerId})"><i class="fa fa-eye"></i></button></td>
+                <td>
+                    <button class="btn-icon" onclick="zoomToLayer(${item.layerId})">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                </td>
             `;
             
-            // Hover na tabela destaca mapa
-            tr.addEventListener('mouseenter', () => {
-                item.layerInstance.setStyle({ color: '#00ffcc', weight: 4, fillOpacity: 0.6 });
-            });
-            tr.addEventListener('mouseleave', () => {
-                item.layerInstance.setStyle({ color: '#ffff00', weight: 2, fillOpacity: 0.2 });
-            });
-
+            // Highlight ao passar mouse na tabela
+            tr.addEventListener('mouseenter', () => item.layerInstance.setStyle({ color: '#00ffcc', weight: 4 }));
+            tr.addEventListener('mouseleave', () => item.layerInstance.setStyle({ color: '#ffff00', weight: 2 }));
+            
             els.tableBody.appendChild(tr);
         });
 
-        // Botão Final de Salvar
+        // Botão de Salvar no final do modal
         const btnSave = document.createElement('button');
         btnSave.className = 'primary';
-        btnSave.innerHTML = '<i class="fa fa-save"></i> Confirmar e Salvar Fazenda';
+        btnSave.innerHTML = '<i class="fa fa-save"></i> Confirmar Cadastro';
         btnSave.onclick = saveToDatabase;
         els.modalFooter.appendChild(btnSave);
 
     } else if (mode === 'view') {
-        // MODO VISUALIZAÇÃO (Somente leitura)
+        // --- MODO VISUALIZAÇÃO (Apenas Leitura) ---
         els.modalTitle.textContent = 'Detalhes da Fazenda';
         isViewMode = true;
 
-        // "currentFeaturesData" aqui já foi carregado com dados do banco
         currentFeaturesData.forEach(item => {
             const areaHa = (turf.area(item.feature) / 10000);
             totalArea += areaHa;
@@ -264,6 +322,7 @@ function openModal(mode) {
             els.tableBody.appendChild(tr);
         });
 
+        // Botão Fechar
         const btnClose = document.createElement('button');
         btnClose.textContent = 'Fechar';
         btnClose.className = 'btn-secondary';
@@ -271,7 +330,8 @@ function openModal(mode) {
         els.modalFooter.appendChild(btnClose);
     }
 
-    els.modalSummary.innerHTML = `ÁREA TOTAL DA FAZENDA: ${totalArea.toFixed(2)} Hectares`;
+    // Atualiza resumo total
+    els.modalSummary.innerHTML = `ÁREA TOTAL: ${totalArea.toFixed(2)} Hectares`;
 }
 
 function closeModal() {
@@ -279,74 +339,90 @@ function closeModal() {
 }
 els.btnCloseModal.addEventListener('click', closeModal);
 
-// Botão "Revisar e Salvar" da sidebar
+// Botão "Revisar & Salvar" da Sidebar
 els.btnOpenSave.addEventListener('click', () => {
+    // Validações
+    const cod = els.inputCod.value.trim();
     const name = els.inputName.value.trim();
-    if (!name) return showToast('Digite o nome da fazenda primeiro.', 'error');
-    if (currentFeaturesData.length === 0) return showToast('Nenhum talhão/polígono no mapa.', 'error');
+    const owner = els.inputOwner.value.trim();
+
+    if (!cod) return showToast('O Código da Fazenda é obrigatório.', 'error');
+    if (!name) return showToast('O Nome da Fazenda é obrigatório.', 'error');
+    if (!owner) return showToast('O Proprietário é obrigatório.', 'error');
+    
+    if (currentFeaturesData.length === 0) return showToast('Nenhum talhão desenhado ou importado.', 'error');
+
     openModal('edit');
 });
 
-// Zoom auxiliar
+// Helper global para o botão de olho na tabela
 window.zoomToLayer = function(id) {
     const item = currentFeaturesData.find(f => f.layerId === id);
     if (item) map.fitBounds(item.layerInstance.getBounds());
 };
 
-// --- SALVAR NO BANCO ---
+// 12. SALVAR NO BANCO DE DADOS (Supabase)
 async function saveToDatabase() {
+    const cod = els.inputCod.value.trim();
     const name = els.inputName.value.trim();
-    const owner = els.inputOwner.value;
+    const owner = els.inputOwner.value.trim();
     
-    // 1. Coletar nomes atualizados da tabela
+    // 1. Atualiza nomes dos talhões com o que foi digitado na tabela
     const inputs = document.querySelectorAll('.input-talhao');
     inputs.forEach(input => {
         const id = parseInt(input.dataset.id);
-        const newVal = input.value;
         const item = currentFeaturesData.find(f => f.layerId === id);
-        if (item) item.feature.properties.talhao = newVal;
+        if (item) {
+            item.feature.properties.talhao = input.value;
+        }
     });
 
-    // 2. Montar FeatureCollection final
+    // 2. Prepara FeatureCollection GeoJSON
     const finalFeatures = currentFeaturesData.map(item => item.feature);
     const featureCollection = {
         type: "FeatureCollection",
         features: finalFeatures
     };
 
-    // 3. Calcular área total para salvar no registro principal
+    // 3. Calcula área total
     const totalArea = (turf.area(featureCollection) / 10000);
 
+    // 4. Payload para o RPC
     const payload = {
+        p_cod_fazenda: cod,
         p_name: name,
         p_owner: owner,
-        p_talhao: 'Múltiplos', // Campo texto simples
+        p_talhao: 'Múltiplos', // Campo legado, salvamos string fixa
         p_area_ha: totalArea,
-        p_geojson: featureCollection // JSONB guarda tudo
+        p_geojson: featureCollection // O JSON inteiro vai aqui
     };
 
-    showToast('Salvando no banco...', 'info');
+    showToast('Enviando dados...', 'info');
     closeModal();
 
     try {
         const { error } = await sb.rpc('insert_farm', payload);
         if (error) throw error;
 
-        showToast('Fazenda e talhões salvos com sucesso!', 'success');
+        showToast('Fazenda cadastrada com sucesso!', 'success');
         
-        // Limpar tudo
-        els.inputName.value = ''; els.inputOwner.value = '';
+        // Limpa formulário
+        els.inputCod.value = ''; 
+        els.inputName.value = ''; 
+        els.inputOwner.value = '';
         currentLayerGroup.clearLayers();
         currentFeaturesData = [];
-        loadFarms(); // Recarrega lista lateral
+        
+        // Recarrega lista
+        loadFarms(); 
 
     } catch (err) {
         console.error(err);
-        showToast('Erro ao salvar: ' + err.message, 'error');
+        showToast('Erro ao salvar: ' + (err.message || err.details), 'error');
     }
 }
 
-// --- CARREGAR LISTA LATERAL ---
+// 13. CARREGAR E LISTAR FAZENDAS
 async function loadFarms() {
     els.farmList.innerHTML = 'Carregando...';
     try {
@@ -355,80 +431,107 @@ async function loadFarms() {
 
         els.farmList.innerHTML = '';
         if (!data || data.length === 0) {
-            els.farmList.innerHTML = '<div style="padding:10px; text-align:center;">Nenhum registro.</div>';
+            els.farmList.innerHTML = '<div style="padding:10px; text-align:center;">Nenhum registro encontrado.</div>';
             return;
         }
 
         data.forEach(farm => {
+            // Conta quantos talhões tem dentro do GeoJSON
+            const numTalhoes = farm.geojson && farm.geojson.features ? farm.geojson.features.length : 1;
+
             const item = document.createElement('div');
             item.className = 'farm-item';
             item.innerHTML = `
                 <div class="farm-info">
+                    <div style="font-size:10px; color:#4ade80; font-weight:bold;">COD: ${farm.cod_fazenda || '?'}</div>
                     <strong>${farm.name}</strong>
-                    <div class="farm-meta">${Number(farm.area_ha).toFixed(2)} ha Total</div>
+                    <div class="farm-meta">
+                        ${Number(farm.area_ha).toFixed(2)} ha • ${numTalhoes} talhões
+                    </div>
                 </div>
-                <button class="btn-icon" title="Ver Detalhes"><i class="fa-solid fa-list"></i></button>
+                <button class="btn-icon" title="Ver Detalhes">
+                    <i class="fa-solid fa-list"></i>
+                </button>
             `;
             
-            // CLICK NA LISTA: Carregar no Mapa e Abrir Tabela
-            item.querySelector('button').addEventListener('click', () => {
-                viewFarmOnMap(farm);
-            });
-
+            // Click: Ver no Mapa
+            item.querySelector('button').addEventListener('click', () => viewFarmOnMap(farm));
+            
             els.farmList.appendChild(item);
         });
     } catch (err) {
-        els.farmList.innerHTML = 'Erro ao carregar.';
+        console.error(err);
+        els.farmList.innerHTML = 'Erro ao carregar lista.';
     }
 }
 
+// 14. VISUALIZAR FAZENDA (Modo View)
 function viewFarmOnMap(farm) {
+    // Limpa mapa
     currentLayerGroup.clearLayers();
-    currentFeaturesData = []; // Reusamos essa var para o View Mode
+    currentFeaturesData = [];
 
-    if (!farm.geojson) return showToast('Erro: Geometria inválida.', 'error');
-
-    let features = [];
-    if (farm.geojson.type === 'FeatureCollection') {
-        features = farm.geojson.features;
-    } else {
-        features = [farm.geojson]; // Compatibilidade com dados antigos
+    if (!farm.geojson) {
+        return showToast('Erro: Fazenda sem geometria válida.', 'error');
     }
 
-    // Adiciona ao mapa e prepara dados para modal
+    // Normaliza features
+    let features = farm.geojson.type === 'FeatureCollection' ? farm.geojson.features : [farm.geojson];
+
     features.forEach(f => {
+        // Cria layer para visualização (cor Ciano)
         const layer = L.geoJSON(f, {
             style: { color: '#00ffcc', weight: 2, fillOpacity: 0.3 }
-        }).getLayers()[0]; // Unwrap
+        }).getLayers()[0];
 
-        if(layer) {
+        if (layer) {
             currentLayerGroup.addLayer(layer);
+            
+            // Adiciona aos dados (sem layerId pois não vamos editar)
             currentFeaturesData.push({
                 feature: f,
                 layerInstance: layer,
-                layerId: null // não precisa em view mode
+                layerId: null
             });
-            
-            // Tooltip simples
-            layer.bindPopup(`Talhão: ${f.properties.talhao || '-'}<br>Area: ${(turf.area(f)/10000).toFixed(2)} ha`);
+
+            layer.bindPopup(`
+                <strong>Talhão: ${f.properties.talhao || '-'}</strong><br>
+                Area: ${(turf.area(f)/10000).toFixed(2)} ha
+            `);
         }
     });
 
-    map.fitBounds(currentLayerGroup.getBounds());
-    
-    // Abre Modal com a tabela
+    // Ajusta zoom
+    const bounds = currentLayerGroup.getBounds();
+    if (bounds.isValid()) {
+        map.fitBounds(bounds, { maxZoom: 17 });
+    }
+
+    // Abre modal com a tabela
     openModal('view');
 }
 
+// 15. UTILITÁRIO: TOAST NOTIFICATION
 function showToast(msg, type = 'success') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    let icon = type === 'error' ? 'exclamation-circle' : 'check-circle';
+    
+    let icon = 'check-circle';
+    if (type === 'error') icon = 'exclamation-circle';
+    if (type === 'info') icon = 'info-circle';
+
     toast.innerHTML = `<i class="fa-solid fa-${icon}"></i> ${msg}`;
     container.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 4000);
+
+    // Auto-remove
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
-// Iniciar
+// INICIALIZAÇÃO
 loadFarms();
