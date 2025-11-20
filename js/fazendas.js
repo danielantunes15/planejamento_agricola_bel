@@ -1,9 +1,10 @@
-// js/fazendas.js - Módulo de Fazendas e Mapa CRUD
+// js/fazendas.js - Módulo de Fazendas
 
 let mapFazendas = null;
 let layerGroupFazendas = null;
 let currentFeaturesData = []; 
 let editingFarmId = null;
+let allFarmsCache = []; // Cache para filtrar sem refazer requisição
 
 const elsMap = {
     inputCod: document.getElementById('input-cod'),
@@ -12,48 +13,57 @@ const elsMap = {
     inputShp: document.getElementById('input-shp'),
     btnOpenSave: document.getElementById('btn-open-save'),
     btnCancel: document.getElementById('btn-cancel-edit'),
-    farmList: document.getElementById('farm-list'),
+    farmList: document.getElementById('farm-list'), // Agora é o Grid Container
     modalOverlay: document.getElementById('modal-overlay'),
     tableBody: document.getElementById('talhoes-tbody'),
     modalFooter: document.getElementById('modal-footer-actions'),
-    modalSummary: document.getElementById('modal-summary')
+    modalSummary: document.getElementById('modal-summary'),
+    // Filtros
+    filterCod: document.getElementById('filter-cod'),
+    filterName: document.getElementById('filter-name'),
+    filterOwner: document.getElementById('filter-owner')
 };
 
-// Inicializa mapa apenas quando necessário
+// --- PÁGINA LISTA GERAL (TABELA) ---
+window.loadFarmsTable = async function() {
+    const tbody = document.getElementById('all-farms-tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Carregando...</td></tr>';
+    const { data, error } = await sb.rpc('get_farms');
+    if(error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;text-align:center;">Erro: ${error.message}</td></tr>`; return; }
+    tbody.innerHTML = '';
+    if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Vazio.</td></tr>'; return; }
+
+    data.forEach(f => {
+        tbody.innerHTML += `<tr><td>${f.cod_fazenda||'-'}</td><td><strong>${f.name}</strong></td><td>${f.owner||'-'}</td><td>${Number(f.area_ha).toFixed(2)} ha</td></tr>`;
+    });
+};
+
+// --- MAPA & CRUD ---
+
 window.initFazendasMap = function() {
-    if(mapFazendas) {
-        setTimeout(() => mapFazendas.invalidateSize(), 200);
-        return;
-    }
+    if(mapFazendas) { setTimeout(() => mapFazendas.invalidateSize(), 200); return; }
 
     const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
-
     mapFazendas = L.map('map', { center: USINA_COORDS, zoom: 13, layers: [googleSat] });
-    L.control.layers({ "Satélite": googleSat, "Mapa": osm }).addTo(mapFazendas);
     
-    // Grupo de Layers editáveis
     layerGroupFazendas = L.featureGroup().addTo(mapFazendas);
-
-    // Ícone Usina
+    
     const usinaIconCrud = L.divIcon({
         html: '<i class="fa-solid fa-industry" style="color: #fff; font-size: 20px; text-shadow: 0 2px 5px black;"></i>',
         className: 'custom-div-icon', iconSize: [20, 20], iconAnchor: [10, 10]
     });
     L.marker(USINA_COORDS, { icon: usinaIconCrud }).addTo(mapFazendas);
 
-    // Controles Geoman (Edição)
     mapFazendas.pm.addControls({ position: 'topleft', drawCircle: false, drawMarker: false, drawPolyline: false, drawCircleMarker: false });
     mapFazendas.pm.setLang('pt_br');
-
-    // Zoom inteligente
     mapFazendas.on('zoomend', () => {
         const div = document.getElementById('map');
         if(mapFazendas.getZoom() < 14) div.classList.add('hide-labels');
         else div.classList.remove('hide-labels');
     });
 
-    loadFarms(); // Carrega lista inicial
+    loadFarms(); 
 }
 
 window.loadOwnersForSelect = async function() {
@@ -69,6 +79,89 @@ window.loadOwnersForSelect = async function() {
     });
 }
 
+// --- LÓGICA DE CARREGAR E FILTRAR FAZENDAS NO MAPA ---
+
+async function loadFarms() {
+    elsMap.farmList.innerHTML = '<div style="color:#aaa; padding:10px;">Carregando...</div>';
+    
+    const { data, error } = await sb.rpc('get_farms');
+    
+    if(error) { elsMap.farmList.innerHTML = 'Erro ao carregar.'; return; }
+    
+    allFarmsCache = data || []; // Salva no cache
+    
+    renderFarmList(allFarmsCache); // Renderiza a lista
+    renderFarmsOnMap(allFarmsCache); // Renderiza no mapa
+}
+
+function renderFarmList(data) {
+    elsMap.farmList.innerHTML = '';
+    
+    if(!data || data.length === 0) {
+        elsMap.farmList.innerHTML = '<div style="color:#aaa; padding:10px;">Nenhuma fazenda encontrada.</div>';
+        return;
+    }
+
+    data.forEach(f => {
+        // Cria o Card para o Grid
+        const card = document.createElement('div');
+        card.className = 'farm-card-item';
+        
+        card.innerHTML = `
+            <div class="farm-card-header">
+                <span class="farm-code">${f.cod_fazenda || '#'}</span>
+            </div>
+            <div>
+                <span class="farm-name">${f.name}</span>
+                <span class="farm-owner"><i class="fa-solid fa-user"></i> ${f.owner || 'Sem dono'}</span>
+            </div>
+            <div class="farm-actions">
+                <button class="btn-secondary" onclick='viewFarm(${JSON.stringify(f).replace(/"/g, '&quot;')})' title="Ver no Mapa"><i class="fa-solid fa-eye"></i></button>
+                <button class="primary" onclick='editFarm(${JSON.stringify(f).replace(/"/g, '&quot;')})' title="Editar"><i class="fa-solid fa-pen"></i></button>
+            </div>
+        `;
+        elsMap.farmList.appendChild(card);
+    });
+}
+
+function renderFarmsOnMap(data) {
+    layerGroupFazendas.clearLayers();
+    const bounds = L.latLngBounds([USINA_COORDS]);
+    
+    data.forEach(f => {
+        const feats = f.geojson.features || [f.geojson];
+        feats.forEach(ft => {
+            const res = createLayerFromFeature(ft, true); 
+            if(res) { 
+                layerGroupFazendas.addLayer(res.layer); 
+                if(res.layer.getBounds().isValid()) bounds.extend(res.layer.getBounds());
+            }
+        });
+    });
+    
+    if(data.length > 0) mapFazendas.fitBounds(bounds, { padding: [50, 50] });
+}
+
+// --- FUNÇÃO DE FILTRO ---
+window.filterFarms = function() {
+    const cod = elsMap.filterCod.value.toLowerCase();
+    const name = elsMap.filterName.value.toLowerCase();
+    const owner = elsMap.filterOwner.value.toLowerCase();
+
+    const filtered = allFarmsCache.filter(f => {
+        const fCod = (f.cod_fazenda || '').toLowerCase();
+        const fName = (f.name || '').toLowerCase();
+        const fOwner = (f.owner || '').toLowerCase();
+        
+        return fCod.includes(cod) && fName.includes(name) && fOwner.includes(owner);
+    });
+
+    renderFarmList(filtered);
+    // Opcional: Se quiser filtrar o mapa também, descomente a linha abaixo:
+    // renderFarmsOnMap(filtered); 
+}
+
+// ... (Restante das funções createLayerFromFeature, saveFarmDB, editFarm, etc, iguais ao anterior) ...
 function createLayerFromFeature(feature, isReadOnly) {
     if (!feature.properties) feature.properties = {};
     const calcArea = (turf.area(feature) / 10000);
@@ -114,7 +207,6 @@ function createLayerFromFeature(feature, isReadOnly) {
     return { layer, feature, layerId };
 }
 
-// Eventos
 elsMap.inputShp.addEventListener('change', async (ev) => {
     const file = ev.target.files[0];
     if (!file) return;
@@ -126,7 +218,6 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
         if(!feats) throw new Error("Sem feições");
         feats.forEach((f, idx) => {
             if(!f.geometry) return;
-            // Transformação UTM se necessário (simplificado)
             const transform = (c) => (typeof c[0]==='number' && (Math.abs(c[0])>180||Math.abs(c[1])>90)) ? proj4("EPSG:32724","EPSG:4326",c) : (Array.isArray(c[0])?c.map(transform):c);
             f.geometry.coordinates = transform(f.geometry.coordinates);
             f.properties.talhao = f.properties.Name || f.properties.TALHAO || `${idx+1}`;
@@ -184,48 +275,28 @@ async function saveFarmDB() {
 window.resetFarmForm = function() {
     elsMap.inputCod.value=''; elsMap.inputName.value=''; elsMap.inputOwner.value='';
     layerGroupFazendas.clearLayers(); currentFeaturesData=[]; editingFarmId=null;
-    elsMap.btnOpenSave.innerHTML = 'Revisar & Salvar';
+    elsMap.btnOpenSave.innerHTML = '<i class="fa-solid fa-save"></i> Salvar';
     elsMap.btnCancel.classList.add('hidden');
-    loadFarms();
+    loadFarms(); // Recarrega lista e mapa
 }
 window.cancelEditFarm = function() { resetFarmForm(); }
 
-async function loadFarms() {
-    elsMap.farmList.innerHTML = 'Carregando...';
-    const { data } = await sb.rpc('get_farms');
-    elsMap.farmList.innerHTML = '';
-    layerGroupFazendas.clearLayers(); 
-    const bounds = L.latLngBounds([USINA_COORDS]);
-
-    if(data && data.length > 0) {
-        data.forEach(f => {
-            const d = document.createElement('div'); d.className='farm-item';
-            d.innerHTML = `<div><small>${f.cod_fazenda||''}</small><br><strong>${f.name}</strong></div><div><button class="btn-icon e"><i class="fa-solid fa-pen"></i></button><button class="btn-icon v"><i class="fa-solid fa-map"></i></button></div>`;
-            d.querySelector('.e').onclick = () => editFarm(f);
-            d.querySelector('.v').onclick = () => viewFarm(f);
-            elsMap.farmList.appendChild(d);
-
-            const feats = f.geojson.features || [f.geojson];
-            feats.forEach(ft => {
-                const res = createLayerFromFeature(ft, true); // ReadOnly no fundo
-                if(res) { 
-                    layerGroupFazendas.addLayer(res.layer); 
-                    if(res.layer.getBounds().isValid()) bounds.extend(res.layer.getBounds());
-                }
-            });
-        });
-        mapFazendas.fitBounds(bounds, { padding: [50, 50] });
-    } else { elsMap.farmList.innerHTML = 'Vazio'; }
-}
-
-function viewFarm(f) {
+// Visualizar no mapa (vindo do botão do grid)
+window.viewFarm = function(f) {
+    // Foca na fazenda sem limpar as outras (apenas zoom)
     const tempGroup = L.featureGroup();
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => tempGroup.addLayer(L.geoJSON(ft)));
-    mapFazendas.fitBounds(tempGroup.getBounds());
+    
+    if(mapFazendas) {
+        mapFazendas.fitBounds(tempGroup.getBounds());
+        // Rola a tela para cima (suave)
+        document.querySelector('.fazenda-top').scrollIntoView({behavior: 'smooth'});
+    }
 }
 
-function editFarm(f) {
+// Editar (vindo do botão do grid)
+window.editFarm = function(f) {
     layerGroupFazendas.clearLayers(); currentFeaturesData = [];
     editingFarmId = f.id;
     elsMap.inputCod.value = f.cod_fazenda; elsMap.inputName.value = f.name; elsMap.inputOwner.value = f.owner;
@@ -234,11 +305,14 @@ function editFarm(f) {
     
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => {
-        const res = createLayerFromFeature(ft, false); // Editável
+        const res = createLayerFromFeature(ft, false); 
         if(res) { 
             layerGroupFazendas.addLayer(res.layer); 
             currentFeaturesData.push({ layerId: res.layerId, feature: res.feature }); 
         }
     });
     mapFazendas.fitBounds(layerGroupFazendas.getBounds());
+    
+    // Rola a tela para cima (suave) para ver o form e o mapa
+    document.querySelector('.fazenda-top').scrollIntoView({behavior: 'smooth'});
 }
