@@ -1,35 +1,36 @@
-// js/proprietarios.js - Módulo de Proprietários
+// js/proprietarios.js
 
 window.loadOwnersList = async function() {
     const tbody = document.getElementById('owner-list-body');
     if(!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Carregando...</td></tr>';
+    toggleLoader(true);
     
     const { data, error } = await sb.rpc('get_fornecedores');
     if (error) {
         tbody.innerHTML = `<tr><td colspan="5" style="color:red">Erro: ${error.message}</td></tr>`;
+        toggleLoader(false);
         return;
     }
     tbody.innerHTML = '';
     if(!data || data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#777;">Nenhum cadastrado.</td></tr>';
-        return;
+    } else {
+        data.forEach(o => {
+            const jsonItem = JSON.stringify(o).replace(/"/g, '&quot;');
+            tbody.innerHTML += `
+                <tr>
+                    <td>${o.cod_fornecedor || '-'}</td>
+                    <td><strong>${o.nome}</strong></td>
+                    <td>${o.cpf_cnpj || '-'}</td>
+                    <td>${o.telefone || '-'}</td>
+                    <td>
+                        <button class="btn-icon" onclick="editOwner(${jsonItem})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-icon" style="color:#ef4444" onclick="delOwner('${o.id}')" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>`;
+        });
     }
-
-    data.forEach(o => {
-        const jsonItem = JSON.stringify(o).replace(/"/g, '&quot;');
-        tbody.innerHTML += `
-            <tr>
-                <td>${o.cod_fornecedor || '-'}</td>
-                <td><strong>${o.nome}</strong></td>
-                <td>${o.cpf_cnpj || '-'}</td>
-                <td>${o.telefone || '-'}</td>
-                <td>
-                    <button class="btn-icon" onclick="editOwner(${jsonItem})" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn-icon" style="color:#ef4444" onclick="delOwner('${o.id}')" title="Excluir"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            </tr>`;
-    });
+    toggleLoader(false);
 };
 
 window.saveOwner = async function() {
@@ -42,7 +43,7 @@ window.saveOwner = async function() {
     };
 
     if(!p.p_nome) return showToast('Nome obrigatório.', 'error');
-    showToast('Salvando...', 'info');
+    toggleLoader(true);
     
     let result;
     if(id) { p.p_id = id; result = await sb.rpc('update_fornecedor', p); } 
@@ -50,6 +51,7 @@ window.saveOwner = async function() {
     
     if(result.error) showToast('Erro: ' + result.error.message, 'error');
     else { showToast('Salvo com sucesso!'); clearOwnerForm(); loadOwnersList(); }
+    toggleLoader(false);
 };
 
 window.editOwner = function(o) {
@@ -67,8 +69,10 @@ window.clearOwnerForm = function() {
 
 window.delOwner = async function(id) {
     if(confirm('Excluir este fornecedor?')) {
+        toggleLoader(true);
         const { error } = await sb.rpc('delete_fornecedor', {p_id: id});
         if(error) showToast('Erro: ' + error.message, 'error');
         else { showToast('Excluído.'); loadOwnersList(); }
+        toggleLoader(false);
     }
 };

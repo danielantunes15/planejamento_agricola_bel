@@ -13,10 +13,7 @@ const elsMap = {
     inputShp: document.getElementById('input-shp'),
     btnOpenSave: document.getElementById('btn-open-save'),
     btnCancel: document.getElementById('btn-cancel-edit'),
-    
-    // Agora aponta para o corpo da tabela
     farmListTbody: document.getElementById('farm-list-tbody'), 
-    
     modalOverlay: document.getElementById('modal-overlay'),
     tableBody: document.getElementById('talhoes-tbody'),
     modalFooter: document.getElementById('modal-footer-actions'),
@@ -30,19 +27,23 @@ const elsMap = {
 window.loadFarmsTable = async function() {
     const tbody = document.getElementById('all-farms-tbody');
     if(!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Carregando...</td></tr>';
+    toggleLoader(true);
     const { data, error } = await sb.rpc('get_farms');
-    if(error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;text-align:center;">Erro: ${error.message}</td></tr>`; return; }
+    if(error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;">Erro: ${error.message}</td></tr>`; toggleLoader(false); return; }
     tbody.innerHTML = '';
-    if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Vazio.</td></tr>'; return; }
-    data.forEach(f => {
-        tbody.innerHTML += `<tr><td>${f.cod_fazenda||'-'}</td><td><strong>${f.name}</strong></td><td>${f.owner||'-'}</td><td>${Number(f.area_ha).toFixed(2)} ha</td></tr>`;
-    });
+    if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum registro.</td></tr>'; }
+    else {
+        data.forEach(f => {
+            tbody.innerHTML += `<tr><td>${f.cod_fazenda||'-'}</td><td><strong>${f.name}</strong></td><td>${f.owner||'-'}</td><td>${Number(f.area_ha).toFixed(2)} ha</td></tr>`;
+        });
+    }
+    toggleLoader(false);
 };
 
 // --- MAPA & CRUD ---
 window.initFazendasMap = function() {
     if(mapFazendas) { setTimeout(() => mapFazendas.invalidateSize(), 200); return; }
+    
     const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
     mapFazendas = L.map('map', { center: USINA_COORDS, zoom: 13, layers: [googleSat] });
     layerGroupFazendas = L.featureGroup().addTo(mapFazendas);
@@ -77,30 +78,25 @@ window.loadOwnersForSelect = async function() {
 }
 
 async function loadFarms() {
-    if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">Carregando...</td></tr>';
+    if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
     
     const { data, error } = await sb.rpc('get_farms');
-    if(error) { if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4">Erro ao carregar</td></tr>'; return; }
+    if(error) { if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4">Erro</td></tr>'; return; }
     
     allFarmsCache = data || []; 
     renderFarmList(allFarmsCache); 
     renderFarmsOnMap(allFarmsCache); 
 }
 
-// --- MUDANÇA: RENDERIZAR COMO TABELA ---
 function renderFarmList(data) {
     if(!elsMap.farmListTbody) return;
     elsMap.farmListTbody.innerHTML = '';
-    
     if(!data || data.length === 0) {
-        elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777; padding:10px;">Nenhuma fazenda encontrada.</td></tr>';
+        elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777; padding:10px;">Nenhuma fazenda.</td></tr>';
         return;
     }
-
     data.forEach(f => {
-        // JSON seguro para passar na função
         const fJson = JSON.stringify(f).replace(/"/g, '&quot;');
-        
         elsMap.farmListTbody.innerHTML += `
             <tr>
                 <td>${f.cod_fazenda || '-'}</td>
@@ -110,8 +106,7 @@ function renderFarmList(data) {
                     <button class="btn-icon" onclick="viewFarm(${fJson})" title="Ver no Mapa"><i class="fa-solid fa-eye"></i></button>
                     <button class="btn-icon" onclick="editFarm(${fJson})" title="Editar"><i class="fa-solid fa-pen"></i></button>
                 </td>
-            </tr>
-        `;
+            </tr>`;
     });
 }
 
@@ -128,7 +123,7 @@ function renderFarmsOnMap(data) {
             }
         });
     });
-    if(data.length > 0) mapFazendas.fitBounds(bounds, { padding: [50, 50] });
+    if(data.length > 0 && mapFazendas) mapFazendas.fitBounds(bounds, { padding: [50, 50] });
 }
 
 window.filterFarms = function() {
@@ -145,7 +140,6 @@ window.filterFarms = function() {
     renderFarmList(filtered);
 }
 
-// ... Funções utilitárias (createLayer, save, edit) iguais ...
 function createLayerFromFeature(feature, isReadOnly) {
     if (!feature.properties) feature.properties = {};
     const calcArea = (turf.area(feature) / 10000);
@@ -190,6 +184,7 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
     const file = ev.target.files[0];
     if (!file) return;
     if(!editingFarmId) { layerGroupFazendas.clearLayers(); currentFeaturesData = []; }
+    toggleLoader(true);
     try {
         const buf = await file.arrayBuffer();
         let geo = file.name.endsWith('.shp') ? shp.parseShp(buf).map(g=>({type:'Feature',properties:{},geometry:g})) : await shp(buf);
@@ -210,6 +205,7 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
         if(bounds.isValid()) mapFazendas.fitBounds(bounds);
         ev.target.value = '';
     } catch(e) { alert('Erro SHP: '+e.message); }
+    toggleLoader(false);
 });
 
 elsMap.btnOpenSave.addEventListener('click', () => {
@@ -233,6 +229,7 @@ elsMap.btnOpenSave.addEventListener('click', () => {
 });
 
 async function saveFarmDB() {
+    toggleLoader(true);
     const payload = {
         p_cod_fazenda: elsMap.inputCod.value,
         p_name: elsMap.inputName.value,
@@ -244,14 +241,16 @@ async function saveFarmDB() {
     let err;
     if(editingFarmId) { payload.p_id = editingFarmId; err = (await sb.rpc('update_farm', payload)).error; } 
     else { err = (await sb.rpc('insert_farm', payload)).error; }
+    
     if(err) showToast('Erro: '+err.message, 'error');
     else { showToast('Salvo!'); elsMap.modalOverlay.classList.add('hidden'); resetFarmForm(); }
+    toggleLoader(false);
 }
 
 window.resetFarmForm = function() {
     elsMap.inputCod.value=''; elsMap.inputName.value=''; elsMap.inputOwner.value='';
     layerGroupFazendas.clearLayers(); currentFeaturesData=[]; editingFarmId=null;
-    elsMap.btnOpenSave.innerHTML = 'Salvar';
+    elsMap.btnOpenSave.innerHTML = '<i class="fa-solid fa-save"></i> Salvar';
     elsMap.btnCancel.classList.add('hidden');
     loadFarms();
 }

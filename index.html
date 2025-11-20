@@ -11,6 +11,10 @@
 </head>
 <body>
 
+  <div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+  </div>
+
   <nav id="main-nav">
     <div class="nav-brand"><i class="fa-solid fa-tractor"></i><span class="brand-text">BEL - AGRÍCOLA</span></div>
     
@@ -34,16 +38,17 @@
   </nav>
 
   <div id="content-area">
+    
     <div id="view-dashboard" class="view-section active">
       <div class="dashboard-container">
         <div id="map-dashboard"></div>
-        
         <div class="dashboard-overlay">
           <div class="stats-card">
             <h3><i class="fa-solid fa-chart-simple"></i> Visão Geral</h3>
             <div class="total-area-box"><span class="label">Área Total Cadastrada</span><span class="value" id="dash-total-area">0.00 ha</span></div>
             <h4>Top 5 Fornecedores (Área)</h4>
-            <ul id="dash-top5-list" class="top5-list"><li>Carregando dados...</li></ul>
+            <p style="font-size:11px; color:#aaa; margin-bottom:5px;">Clique para filtrar no mapa:</p>
+            <ul id="dash-top5-list" class="top5-list"><li>Carregando...</li></ul>
           </div>
         </div>
       </div>
@@ -56,14 +61,16 @@
           <button class="primary" style="width:auto;" onclick="switchView('fazendas')"><i class="fa-solid fa-plus"></i> Novo Cadastro</button>
         </header>
         <div class="card table-responsive">
-          <table class="styled-table"><thead><tr><th>Cód</th><th>Nome da Fazenda</th><th>Proprietário</th><th>Área Total (ha)</th></tr></thead><tbody id="all-farms-tbody"></tbody></table>
+          <table class="styled-table">
+            <thead><tr><th>Cód</th><th>Nome da Fazenda</th><th>Proprietário</th><th>Área Total (ha)</th></tr></thead>
+            <tbody id="all-farms-tbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <div id="view-fazendas" class="view-section hidden">
       <div class="fazenda-layout">
-        
         <div class="fazenda-top">
           <aside class="form-sidebar">
             <div class="card">
@@ -90,7 +97,6 @@
           </aside>
           <main id="map-container"><div id="map"></div></main>
         </div>
-
         <div class="fazenda-bottom">
           <div class="filter-header">
             <h3><i class="fa-solid fa-list"></i> Cadastradas</h3>
@@ -100,33 +106,94 @@
               <input type="text" id="filter-owner" placeholder="Proprietário..." onkeyup="filterFarms()" style="flex:1;">
             </div>
           </div>
-          
           <div class="table-wrapper-bottom">
             <table class="styled-table small-table">
-              <thead>
-                <tr>
-                  <th style="width:80px;">Cód</th>
-                  <th>Fazenda</th>
-                  <th>Proprietário</th>
-                  <th style="width:100px;">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="farm-list-tbody">
-                </tbody>
+              <thead><tr><th style="width:80px;">Cód</th><th>Fazenda</th><th>Proprietário</th><th style="width:100px;">Ações</th></tr></thead>
+              <tbody id="farm-list-tbody"></tbody>
             </table>
           </div>
         </div>
-
       </div>
     </div>
 
-    <div id="view-proprietarios" class="view-section hidden"><div class="crud-container"><header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header><div class="crud-body"><div class="card crud-form"><h3>Novo / Editar</h3><input type="hidden" id="owner-id"><div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="owner-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="owner-name" type="text"></div></div><div class="form-group row"><div style="flex:1"><label>CPF/CNPJ</label><input id="owner-cpf" type="text"></div><div style="flex:1"><label>Telefone</label><input id="owner-tel" type="text"></div></div><div class="buttons"><button class="primary" onclick="saveOwner()">Salvar</button><button class="btn-secondary" onclick="clearOwnerForm()">Limpar</button></div></div><div class="card crud-list-container"><h3>Registros</h3><div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>CPF</th><th>Tel</th><th>Ações</th></tr></thead><tbody id="owner-list-body"></tbody></table></div></div></div></div></div>
-    <div id="view-frentes" class="view-section hidden"><div class="crud-container"><header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header><div class="crud-body"><div class="card crud-form"><h3>Novo / Editar</h3><input type="hidden" id="front-id"><div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="front-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="front-name" type="text"></div></div><div class="buttons"><button class="primary" onclick="saveFront()">Salvar</button><button class="btn-secondary" onclick="clearFrontForm()">Limpar</button></div></div><div class="card crud-list-container"><h3>Registros</h3><div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>Ações</th></tr></thead><tbody id="front-list-body"></tbody></table></div></div></div></div></div>
-    <div id="view-producao" class="view-section hidden"><div class="empty-state"><i class="fa-solid fa-boxes-stacked fa-4x"></i><h2>Produção</h2><p>Em Desenvolvimento</p></div></div>
+    <div id="view-producao" class="view-section hidden">
+      <div class="crud-container">
+        <header class="crud-header"><h2><i class="fa-solid fa-boxes-stacked"></i> Lançamento de Produção</h2></header>
+        <div class="crud-body">
+          <div class="card crud-form">
+            <h3>Novo Registro</h3>
+            <input type="hidden" id="prod-id">
+            <div class="form-group row">
+              <div style="flex:1"><label>Data *</label><input id="prod-data" type="date"></div>
+              <div style="flex:2"><label>Fazenda *</label><select id="prod-fazenda"><option value="">Carregando...</option></select></div>
+            </div>
+            <div class="form-group row">
+              <div style="flex:2"><label>Frente</label><select id="prod-frente"><option value="">Carregando...</option></select></div>
+              <div style="flex:1"><label>Peso (Ton) *</label><input id="prod-ton" type="number" step="0.01" placeholder="0.00"></div>
+            </div>
+            <div class="buttons">
+              <button class="primary" onclick="saveProducao()">Lançar Produção</button>
+              <button class="btn-secondary" onclick="clearProducaoForm()">Limpar</button>
+            </div>
+          </div>
+          <div class="card crud-list-container">
+            <h3>Últimos Lançamentos</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Data</th><th>Fazenda</th><th>Frente</th><th>Ton</th><th>Ações</th></tr></thead>
+                <tbody id="prod-list-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-proprietarios" class="view-section hidden">
+      <div class="crud-container">
+        <header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header>
+        <div class="crud-body">
+          <div class="card crud-form">
+            <h3>Novo / Editar</h3><input type="hidden" id="owner-id">
+            <div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="owner-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="owner-name" type="text"></div></div>
+            <div class="form-group row"><div style="flex:1"><label>CPF/CNPJ</label><input id="owner-cpf" type="text"></div><div style="flex:1"><label>Telefone</label><input id="owner-tel" type="text"></div></div>
+            <div class="buttons"><button class="primary" onclick="saveOwner()">Salvar</button><button class="btn-secondary" onclick="clearOwnerForm()">Limpar</button></div>
+          </div>
+          <div class="card crud-list-container">
+            <h3>Registros</h3>
+            <div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>CPF</th><th>Tel</th><th>Ações</th></tr></thead><tbody id="owner-list-body"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-frentes" class="view-section hidden">
+      <div class="crud-container">
+        <header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header>
+        <div class="crud-body">
+          <div class="card crud-form">
+            <h3>Novo / Editar</h3><input type="hidden" id="front-id">
+            <div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="front-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="front-name" type="text"></div></div>
+            <div class="buttons"><button class="primary" onclick="saveFront()">Salvar</button><button class="btn-secondary" onclick="clearFrontForm()">Limpar</button></div>
+          </div>
+          <div class="card crud-list-container">
+            <h3>Registros</h3>
+            <div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>Ações</th></tr></thead><tbody id="front-list-body"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="view-queima" class="view-section hidden"><div class="empty-state"><i class="fa-solid fa-fire fa-4x"></i><h2>Horas Queima</h2><p>Em Desenvolvimento</p></div></div>
   </div>
 
-  <div id="modal-overlay" class="hidden"><div class="modal"><div class="modal-header"><h3 id="modal-title">Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div><div class="modal-body"><div id="modal-summary" class="summary-box"></div><div class="table-container"><table id="talhoes-table"><thead><tr><th>Talhão</th><th>Área</th><th>Ação</th></tr></thead><tbody id="talhoes-tbody"></tbody></table></div></div><div class="modal-footer" id="modal-footer-actions"></div></div></div>
+  <div id="modal-overlay" class="hidden">
+    <div class="modal">
+      <div class="modal-header"><h3 id="modal-title">Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div>
+      <div class="modal-body"><div id="modal-summary" class="summary-box"></div><div class="table-container"><table id="talhoes-table"><thead><tr><th>Talhão</th><th>Área</th><th>Ação</th></tr></thead><tbody id="talhoes-tbody"></tbody></table></div></div>
+      <div class="modal-footer" id="modal-footer-actions"></div>
+    </div>
+  </div>
   <div id="toast-container"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -138,6 +205,7 @@
   
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/producao.js"></script>
   <script src="js/proprietarios.js"></script>
   <script src="js/frentes.js"></script>
   <script src="js/fazendas.js"></script>
