@@ -16,7 +16,7 @@
     
     <div class="nav-group-simple">
       <button class="nav-btn active" onclick="switchView('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></button>
-      <button class="nav-btn" onclick="switchView('lista-fazendas')"><i class="fa-solid fa-table-list"></i><span>Fazendas</span></button>
+      <button class="nav-btn" onclick="switchView('lista-fazendas')"><i class="fa-solid fa-table-list"></i><span>Fazendas (Relatório)</span></button>
       <button class="nav-btn" onclick="switchView('producao')"><i class="fa-solid fa-boxes-stacked"></i><span>Produção</span></button>
       <button class="nav-btn" onclick="switchView('queima')"><i class="fa-solid fa-fire"></i><span>Horas Queima</span></button>
     </div>
@@ -37,6 +37,7 @@
     <div id="view-dashboard" class="view-section active">
       <div class="dashboard-container">
         <div id="map-dashboard"></div>
+        
         <div class="dashboard-overlay">
           <div class="stats-card">
             <h3><i class="fa-solid fa-chart-simple"></i> Visão Geral</h3>
@@ -87,24 +88,32 @@
               </div>
             </div>
           </aside>
-
-          <main id="map-container">
-            <div id="map"></div>
-          </main>
+          <main id="map-container"><div id="map"></div></main>
         </div>
 
         <div class="fazenda-bottom">
           <div class="filter-header">
-            <h3><i class="fa-solid fa-list"></i> Fazendas Cadastradas</h3>
+            <h3><i class="fa-solid fa-list"></i> Cadastradas</h3>
             <div class="filter-controls">
-              <input type="text" id="filter-cod" placeholder="Filtrar Cód." onkeyup="filterFarms()" style="width: 100px;">
-              <input type="text" id="filter-name" placeholder="Filtrar Nome Fazenda..." onkeyup="filterFarms()" style="flex:1;">
-              <input type="text" id="filter-owner" placeholder="Filtrar Proprietário..." onkeyup="filterFarms()" style="flex:1;">
+              <input type="text" id="filter-cod" placeholder="Cód" onkeyup="filterFarms()" style="width: 80px;">
+              <input type="text" id="filter-name" placeholder="Nome..." onkeyup="filterFarms()" style="flex:1;">
+              <input type="text" id="filter-owner" placeholder="Proprietário..." onkeyup="filterFarms()" style="flex:1;">
             </div>
           </div>
           
-          <div id="farm-list" class="farm-grid-container">
-            Carregando...
+          <div class="table-wrapper-bottom">
+            <table class="styled-table small-table">
+              <thead>
+                <tr>
+                  <th style="width:80px;">Cód</th>
+                  <th>Fazenda</th>
+                  <th>Proprietário</th>
+                  <th style="width:100px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="farm-list-tbody">
+                </tbody>
+            </table>
           </div>
         </div>
 

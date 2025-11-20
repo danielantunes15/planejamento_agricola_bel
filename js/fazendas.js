@@ -4,7 +4,7 @@ let mapFazendas = null;
 let layerGroupFazendas = null;
 let currentFeaturesData = []; 
 let editingFarmId = null;
-let allFarmsCache = []; // Cache para filtrar sem refazer requisição
+let allFarmsCache = []; 
 
 const elsMap = {
     inputCod: document.getElementById('input-cod'),
@@ -13,18 +13,20 @@ const elsMap = {
     inputShp: document.getElementById('input-shp'),
     btnOpenSave: document.getElementById('btn-open-save'),
     btnCancel: document.getElementById('btn-cancel-edit'),
-    farmList: document.getElementById('farm-list'), // Agora é o Grid Container
+    
+    // Agora aponta para o corpo da tabela
+    farmListTbody: document.getElementById('farm-list-tbody'), 
+    
     modalOverlay: document.getElementById('modal-overlay'),
     tableBody: document.getElementById('talhoes-tbody'),
     modalFooter: document.getElementById('modal-footer-actions'),
     modalSummary: document.getElementById('modal-summary'),
-    // Filtros
     filterCod: document.getElementById('filter-cod'),
     filterName: document.getElementById('filter-name'),
     filterOwner: document.getElementById('filter-owner')
 };
 
-// --- PÁGINA LISTA GERAL (TABELA) ---
+// --- LISTA GERAL (RELATÓRIO) ---
 window.loadFarmsTable = async function() {
     const tbody = document.getElementById('all-farms-tbody');
     if(!tbody) return;
@@ -33,20 +35,16 @@ window.loadFarmsTable = async function() {
     if(error) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;text-align:center;">Erro: ${error.message}</td></tr>`; return; }
     tbody.innerHTML = '';
     if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px;">Vazio.</td></tr>'; return; }
-
     data.forEach(f => {
         tbody.innerHTML += `<tr><td>${f.cod_fazenda||'-'}</td><td><strong>${f.name}</strong></td><td>${f.owner||'-'}</td><td>${Number(f.area_ha).toFixed(2)} ha</td></tr>`;
     });
 };
 
 // --- MAPA & CRUD ---
-
 window.initFazendasMap = function() {
     if(mapFazendas) { setTimeout(() => mapFazendas.invalidateSize(), 200); return; }
-
     const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
     mapFazendas = L.map('map', { center: USINA_COORDS, zoom: 13, layers: [googleSat] });
-    
     layerGroupFazendas = L.featureGroup().addTo(mapFazendas);
     
     const usinaIconCrud = L.divIcon({
@@ -62,7 +60,6 @@ window.initFazendasMap = function() {
         if(mapFazendas.getZoom() < 14) div.classList.add('hide-labels');
         else div.classList.remove('hide-labels');
     });
-
     loadFarms(); 
 }
 
@@ -79,55 +76,48 @@ window.loadOwnersForSelect = async function() {
     });
 }
 
-// --- LÓGICA DE CARREGAR E FILTRAR FAZENDAS NO MAPA ---
-
 async function loadFarms() {
-    elsMap.farmList.innerHTML = '<div style="color:#aaa; padding:10px;">Carregando...</div>';
+    if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">Carregando...</td></tr>';
     
     const { data, error } = await sb.rpc('get_farms');
+    if(error) { if(elsMap.farmListTbody) elsMap.farmListTbody.innerHTML = '<tr><td colspan="4">Erro ao carregar</td></tr>'; return; }
     
-    if(error) { elsMap.farmList.innerHTML = 'Erro ao carregar.'; return; }
-    
-    allFarmsCache = data || []; // Salva no cache
-    
-    renderFarmList(allFarmsCache); // Renderiza a lista
-    renderFarmsOnMap(allFarmsCache); // Renderiza no mapa
+    allFarmsCache = data || []; 
+    renderFarmList(allFarmsCache); 
+    renderFarmsOnMap(allFarmsCache); 
 }
 
+// --- MUDANÇA: RENDERIZAR COMO TABELA ---
 function renderFarmList(data) {
-    elsMap.farmList.innerHTML = '';
+    if(!elsMap.farmListTbody) return;
+    elsMap.farmListTbody.innerHTML = '';
     
     if(!data || data.length === 0) {
-        elsMap.farmList.innerHTML = '<div style="color:#aaa; padding:10px;">Nenhuma fazenda encontrada.</div>';
+        elsMap.farmListTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#777; padding:10px;">Nenhuma fazenda encontrada.</td></tr>';
         return;
     }
 
     data.forEach(f => {
-        // Cria o Card para o Grid
-        const card = document.createElement('div');
-        card.className = 'farm-card-item';
+        // JSON seguro para passar na função
+        const fJson = JSON.stringify(f).replace(/"/g, '&quot;');
         
-        card.innerHTML = `
-            <div class="farm-card-header">
-                <span class="farm-code">${f.cod_fazenda || '#'}</span>
-            </div>
-            <div>
-                <span class="farm-name">${f.name}</span>
-                <span class="farm-owner"><i class="fa-solid fa-user"></i> ${f.owner || 'Sem dono'}</span>
-            </div>
-            <div class="farm-actions">
-                <button class="btn-secondary" onclick='viewFarm(${JSON.stringify(f).replace(/"/g, '&quot;')})' title="Ver no Mapa"><i class="fa-solid fa-eye"></i></button>
-                <button class="primary" onclick='editFarm(${JSON.stringify(f).replace(/"/g, '&quot;')})' title="Editar"><i class="fa-solid fa-pen"></i></button>
-            </div>
+        elsMap.farmListTbody.innerHTML += `
+            <tr>
+                <td>${f.cod_fazenda || '-'}</td>
+                <td><strong>${f.name}</strong></td>
+                <td>${f.owner || '-'}</td>
+                <td>
+                    <button class="btn-icon" onclick="viewFarm(${fJson})" title="Ver no Mapa"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn-icon" onclick="editFarm(${fJson})" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                </td>
+            </tr>
         `;
-        elsMap.farmList.appendChild(card);
     });
 }
 
 function renderFarmsOnMap(data) {
     layerGroupFazendas.clearLayers();
     const bounds = L.latLngBounds([USINA_COORDS]);
-    
     data.forEach(f => {
         const feats = f.geojson.features || [f.geojson];
         feats.forEach(ft => {
@@ -138,11 +128,9 @@ function renderFarmsOnMap(data) {
             }
         });
     });
-    
     if(data.length > 0) mapFazendas.fitBounds(bounds, { padding: [50, 50] });
 }
 
-// --- FUNÇÃO DE FILTRO ---
 window.filterFarms = function() {
     const cod = elsMap.filterCod.value.toLowerCase();
     const name = elsMap.filterName.value.toLowerCase();
@@ -152,34 +140,26 @@ window.filterFarms = function() {
         const fCod = (f.cod_fazenda || '').toLowerCase();
         const fName = (f.name || '').toLowerCase();
         const fOwner = (f.owner || '').toLowerCase();
-        
         return fCod.includes(cod) && fName.includes(name) && fOwner.includes(owner);
     });
-
     renderFarmList(filtered);
-    // Opcional: Se quiser filtrar o mapa também, descomente a linha abaixo:
-    // renderFarmsOnMap(filtered); 
 }
 
-// ... (Restante das funções createLayerFromFeature, saveFarmDB, editFarm, etc, iguais ao anterior) ...
+// ... Funções utilitárias (createLayer, save, edit) iguais ...
 function createLayerFromFeature(feature, isReadOnly) {
     if (!feature.properties) feature.properties = {};
     const calcArea = (turf.area(feature) / 10000);
     let displayArea = feature.properties.area_manual ? parseFloat(feature.properties.area_manual) : calcArea;
     let rawName = feature.properties.talhao || '';
     let labelName = rawName.replace(/Talhão\s*|T-/yi, '').trim() || "?";
-
     const layer = L.geoJSON(feature, {
         style: { color: isReadOnly ? '#00ffcc' : '#ffff00', weight: isReadOnly ? 2 : 3, fillOpacity: 0.2 }
     }).getLayers()[0];
-
     if (!layer) return null;
     const layerId = L.stamp(layer);
     feature.properties.tempId = layerId;
-
     const labelContent = `<div style="line-height:1;text-align:center;"><span style="font-size:14px;display:block;">${labelName}</span><span style="font-size:10px;opacity:0.9;">${displayArea.toFixed(2)} ha</span></div>`;
     layer.bindTooltip(labelContent, { permanent: true, direction: 'center', className: 'talhao-label', interactive: false });
-
     if (!isReadOnly) {
         const content = document.createElement('div');
         content.className = 'edit-popup-form';
@@ -187,7 +167,6 @@ function createLayerFromFeature(feature, isReadOnly) {
             <label>Talhão:</label><input type="text" id="en-${layerId}" value="${labelName}">
             <label>Área (ha):</label><input type="number" step="0.01" id="ea-${layerId}" value="${displayArea.toFixed(2)}">
             <button id="bs-${layerId}" style="margin-top:5px;background:#10b981;color:#fff;border:0;padding:5px;cursor:pointer;border-radius:3px;">Ok</button>`;
-        
         layer.bindPopup(content);
         layer.on('popupopen', () => {
             const btn = document.getElementById(`bs-${layerId}`);
@@ -236,7 +215,6 @@ elsMap.inputShp.addEventListener('change', async (ev) => {
 elsMap.btnOpenSave.addEventListener('click', () => {
     if(!elsMap.inputCod.value || !elsMap.inputName.value || !elsMap.inputOwner.value) return showToast('Preencha campos obrigatórios', 'error');
     if(currentFeaturesData.length===0) return showToast('Mapa vazio', 'error');
-    
     elsMap.modalOverlay.classList.remove('hidden');
     elsMap.tableBody.innerHTML = '';
     elsMap.modalFooter.innerHTML = '';
@@ -263,11 +241,9 @@ async function saveFarmDB() {
         p_area_ha: parseFloat(elsMap.modalSummary.innerText.replace('Total: ','').replace(' ha','')),
         p_geojson: { type: "FeatureCollection", features: currentFeaturesData.map(i=>i.feature) }
     };
-    
     let err;
     if(editingFarmId) { payload.p_id = editingFarmId; err = (await sb.rpc('update_farm', payload)).error; } 
     else { err = (await sb.rpc('insert_farm', payload)).error; }
-    
     if(err) showToast('Erro: '+err.message, 'error');
     else { showToast('Salvo!'); elsMap.modalOverlay.classList.add('hidden'); resetFarmForm(); }
 }
@@ -275,44 +251,33 @@ async function saveFarmDB() {
 window.resetFarmForm = function() {
     elsMap.inputCod.value=''; elsMap.inputName.value=''; elsMap.inputOwner.value='';
     layerGroupFazendas.clearLayers(); currentFeaturesData=[]; editingFarmId=null;
-    elsMap.btnOpenSave.innerHTML = '<i class="fa-solid fa-save"></i> Salvar';
+    elsMap.btnOpenSave.innerHTML = 'Salvar';
     elsMap.btnCancel.classList.add('hidden');
-    loadFarms(); // Recarrega lista e mapa
+    loadFarms();
 }
 window.cancelEditFarm = function() { resetFarmForm(); }
 
-// Visualizar no mapa (vindo do botão do grid)
 window.viewFarm = function(f) {
-    // Foca na fazenda sem limpar as outras (apenas zoom)
     const tempGroup = L.featureGroup();
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => tempGroup.addLayer(L.geoJSON(ft)));
-    
     if(mapFazendas) {
         mapFazendas.fitBounds(tempGroup.getBounds());
-        // Rola a tela para cima (suave)
         document.querySelector('.fazenda-top').scrollIntoView({behavior: 'smooth'});
     }
 }
 
-// Editar (vindo do botão do grid)
 window.editFarm = function(f) {
     layerGroupFazendas.clearLayers(); currentFeaturesData = [];
     editingFarmId = f.id;
     elsMap.inputCod.value = f.cod_fazenda; elsMap.inputName.value = f.name; elsMap.inputOwner.value = f.owner;
     elsMap.btnOpenSave.innerHTML = 'Atualizar';
     elsMap.btnCancel.classList.remove('hidden');
-    
     const feats = f.geojson.features || [f.geojson];
     feats.forEach(ft => {
         const res = createLayerFromFeature(ft, false); 
-        if(res) { 
-            layerGroupFazendas.addLayer(res.layer); 
-            currentFeaturesData.push({ layerId: res.layerId, feature: res.feature }); 
-        }
+        if(res) { layerGroupFazendas.addLayer(res.layer); currentFeaturesData.push({ layerId: res.layerId, feature: res.feature }); }
     });
     mapFazendas.fitBounds(layerGroupFazendas.getBounds());
-    
-    // Rola a tela para cima (suave) para ver o form e o mapa
     document.querySelector('.fazenda-top').scrollIntoView({behavior: 'smooth'});
 }

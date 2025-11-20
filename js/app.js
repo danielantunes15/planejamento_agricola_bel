@@ -1,16 +1,17 @@
-// js/app.js (Atualizado)
+// js/app.js
 
-// ... (Setup Global e Supabase mantidos) ...
+// 1. SETUP GLOBAL
 if (typeof APP_CONFIG === 'undefined') alert('ERRO: config.js não encontrado.');
 const sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_KEY);
+
 if (typeof proj4 !== 'undefined') {
     proj4.defs("EPSG:32724", "+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs");
 }
 const USINA_COORDS = [-17.643763707243053, -40.18234136873469];
 
+// 2. NAVEGAÇÃO
 window.switchView = function(viewId) {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    
     const activeBtn = document.querySelector(`.nav-btn[onclick="switchView('${viewId}')"]`);
     if(activeBtn) {
         activeBtn.classList.add('active');
@@ -22,18 +23,24 @@ window.switchView = function(viewId) {
     const view = document.getElementById(`view-${viewId}`);
     if(view) view.classList.add('active');
 
-    // TRIGGERS POR TELA
+    // --- CORREÇÃO DO MAPA AQUI ---
     if(viewId === 'dashboard') {
-        setTimeout(() => { if(mapDash) mapDash.invalidateSize(); }, 200);
         loadDashboardData();
+        
+        // Força o mapa a recalcular o tamanho
+        if(mapDash) {
+            // Executa imediatamente
+            mapDash.invalidateSize();
+            
+            // E executa novamente após um breve momento para garantir
+            setTimeout(() => { 
+                mapDash.invalidateSize(); 
+            }, 400);
+        }
     }
     
-    // NOVO: Lista de Fazendas
-    if(viewId === 'lista-fazendas') {
-        if(typeof loadFarmsTable === 'function') loadFarmsTable();
-    }
-
-    // Mapa de Fazendas
+    if(viewId === 'lista-fazendas') if(typeof loadFarmsTable === 'function') loadFarmsTable();
+    
     if(viewId === 'fazendas') {
         if(typeof initFazendasMap === 'function') initFazendasMap(); 
         if(typeof loadOwnersForSelect === 'function') loadOwnersForSelect();
@@ -43,31 +50,28 @@ window.switchView = function(viewId) {
     if(viewId === 'frentes') if(typeof loadFrontsList === 'function') loadFrontsList();
 };
 
-// ... (Restante do arquivo igual: toggleSubmenu, initDashboardMap, Utils) ...
 window.toggleSubmenu = function(id) {
     const submenu = document.getElementById(`submenu-${id}`);
     const btn = submenu.previousElementSibling; 
     const parent = btn.parentElement;
-
     if(submenu.classList.contains('open')) {
         submenu.classList.remove('open');
         parent.classList.remove('open');
     } else {
-        document.querySelectorAll('.submenu-container').forEach(s => {
-            s.classList.remove('open');
-            s.parentElement.classList.remove('open');
-        });
+        document.querySelectorAll('.submenu-container').forEach(s => { s.classList.remove('open'); s.parentElement.classList.remove('open'); });
         submenu.classList.add('open');
         parent.classList.add('open');
     }
 };
 
+// 3. DASHBOARD CONTROLLER
 let mapDash = null;
 let layerGroupDash = null;
 
 async function loadDashboardData() {
     if(!mapDash) {
-        const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, subdomains: ['mt0','mt1','mt2','mt3'] });
+        const googleSat = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 21, attribution: 'Google' });
+        
         mapDash = L.map('map-dashboard', { center: USINA_COORDS, zoom: 13, zoomControl: false, layers: [googleSat] });
         L.control.zoom({ position: 'topright' }).addTo(mapDash);
         
@@ -78,6 +82,9 @@ async function loadDashboardData() {
         L.marker(USINA_COORDS, { icon: usinaIcon }).addTo(mapDash).bindPopup("<strong>USINA BEL</strong>");
         layerGroupDash = L.featureGroup().addTo(mapDash);
     }
+
+    // Garante redimensionamento ao carregar dados
+    setTimeout(() => { mapDash.invalidateSize(); }, 200);
 
     const listEl = document.getElementById('dash-top5-list');
     const totalEl = document.getElementById('dash-total-area');
@@ -118,12 +125,10 @@ async function loadDashboardData() {
     listEl.innerHTML = '';
 
     const maxArea = top5.length > 0 ? top5[0].area : 1;
-
     top5.forEach((item, index) => {
         const percent = (item.area / maxArea) * 100;
         listEl.innerHTML += `<li><div style="width:100%"><div style="display:flex; justify-content:space-between;"><span class="top5-name">${index+1}. ${item.name}</span><span class="top5-val">${item.area.toFixed(2)} ha</span></div><div class="top5-bar-bg"><div class="top5-bar-fill" style="width:${percent}%"></div></div></div></li>`;
     });
-
     if(others.length > 0) {
          listEl.innerHTML += `<li style="margin-top:10px; border-top:1px dashed #555; padding-top:10px;"><div style="width:100%"><div style="display:flex; justify-content:space-between;"><span class="top5-name">Outros (${others.length})</span><span class="top5-val">${othersArea.toFixed(2)} ha</span></div><div class="top5-bar-bg"><div class="top5-bar-fill" style="width: ${(othersArea/totalArea)*100}%; background: #64748b"></div></div></div></li>`;
     }
@@ -138,5 +143,10 @@ window.showToast = function(msg, type = 'success') {
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 document.getElementById('btn-close-modal').onclick = () => document.getElementById('modal-overlay').classList.add('hidden');
+
+// Listener para redimensionamento da janela
+window.addEventListener('resize', () => {
+    if(mapDash) mapDash.invalidateSize();
+});
 
 loadDashboardData();
