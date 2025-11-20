@@ -14,7 +14,10 @@
 <body>
 
   <nav id="main-nav">
-    <div class="nav-brand"><i class="fa-solid fa-tractor"></i></div>
+    <div class="nav-brand">
+      <i class="fa-solid fa-tractor"></i>
+      <span class="brand-text">BEL - AGRÍCOLA</span>
+    </div>
     
     <div class="nav-group-simple">
       <button class="nav-btn active" onclick="switchView('dashboard')">
@@ -22,12 +25,19 @@
       </button>
     </div>
 
-    <div class="nav-divider"></div>
+    <div class="nav-group-simple">
+      <button class="nav-btn" onclick="switchView('producao')">
+        <i class="fa-solid fa-boxes-stacked"></i><span>Produção</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('queima')">
+        <i class="fa-solid fa-fire"></i><span>Horas Queima</span>
+      </button>
+    </div>
 
     <div class="nav-group-dropdown">
       <button class="nav-btn dropdown-btn" onclick="toggleSubmenu('cadastros')">
-        <i class="fa-solid fa-folder-tree"></i>
-        <span style="flex:1; text-align:left; padding-left:10px;">Cadastros</span>
+        <i class="fa-solid fa-address-card"></i>
+        <span style="flex:1; text-align:left;">Cadastros</span>
         <i class="fa-solid fa-chevron-down arrow-icon"></i>
       </button>
       
@@ -44,170 +54,18 @@
       </div>
     </div>
 
-    <div class="nav-divider"></div>
-
-    <div class="nav-group-simple">
-      <button class="nav-btn" onclick="switchView('producao')">
-        <i class="fa-solid fa-boxes-stacked"></i><span>Produção</span>
-      </button>
-      <button class="nav-btn" onclick="switchView('queima')">
-        <i class="fa-solid fa-fire"></i><span>Horas Queima</span>
-      </button>
-    </div>
   </nav>
 
   <div id="content-area">
-
-    <div id="view-dashboard" class="view-section active">
-      <div class="dashboard-container">
-        <div id="map-dashboard"></div>
-        <div class="dashboard-overlay">
-          <div class="stats-card">
-            <h3><i class="fa-solid fa-chart-simple"></i> Visão Geral</h3>
-            <div class="total-area-box">
-              <span class="label">Área Total Cadastrada</span>
-              <span class="value" id="dash-total-area">0.00 ha</span>
-            </div>
-            <h4>Top 5 Fornecedores (Área)</h4>
-            <ul id="dash-top5-list" class="top5-list">
-              <li>Carregando dados...</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="view-fazendas" class="view-section hidden">
-      <aside id="map-sidebar">
-        <header><h2><i class="fa-solid fa-wheat"></i> Gestão de Fazendas</h2></header>
-        
-        <section class="card">
-          <div class="card-header"><h3>Nova Fazenda</h3></div>
-          <div class="form-group row">
-            <div style="flex: 1;"><label>Cód. *</label><input id="input-cod" type="text" placeholder="001" /></div>
-            <div style="flex: 2;"><label>Nome *</label><input id="input-name" type="text" placeholder="Fazenda..." /></div>
-          </div>
-          <div class="form-group">
-            <label>Proprietário (Pesquisar) *</label>
-            <input list="owners-list" id="input-owner" class="full-width" placeholder="Digite para buscar...">
-            <datalist id="owners-list"></datalist>
-            <small class="hint-link" onclick="switchView('proprietarios')">+ Cadastrar Novo</small>
-          </div>
-          <div class="file-input-wrapper">
-            <label>Shapefile (.zip / .shp)</label>
-            <label for="input-shp" class="btn-secondary"><i class="fa-solid fa-upload"></i> Carregar Arquivo</label>
-            <input id="input-shp" type="file" accept=".zip,.shp" style="display:none" />
-          </div>
-          <div class="buttons">
-            <button id="btn-open-save" class="primary"><i class="fa-solid fa-list-check"></i> Revisar & Salvar</button>
-            <button id="btn-cancel-edit" class="btn-danger hidden" onclick="cancelEditFarm()">Cancelar</button>
-          </div>
-        </section>
-
-        <section class="card list-card">
-          <h3>Fazendas Cadastradas</h3>
-          <div id="farm-list" class="farm-list">Carregando...</div>
-        </section>
-      </aside>
-
-      <main id="map-container"><div id="map"></div></main>
-    </div>
-
-    <div id="view-proprietarios" class="view-section hidden">
-      <div class="crud-container">
-        <header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header>
-        <div class="crud-body">
-          <div class="card crud-form">
-            <h3>Novo / Editar</h3>
-            <input type="hidden" id="owner-id">
-            <div class="form-group row">
-              <div style="flex:1"><label>Cód.</label><input id="owner-cod" type="text"></div>
-              <div style="flex:3"><label>Nome *</label><input id="owner-name" type="text"></div>
-            </div>
-            <div class="form-group row">
-              <div style="flex:1"><label>CPF/CNPJ</label><input id="owner-cpf" type="text"></div>
-              <div style="flex:1"><label>Telefone</label><input id="owner-tel" type="text"></div>
-            </div>
-            <div class="buttons">
-              <button class="primary" onclick="saveOwner()"><i class="fa-solid fa-save"></i> Salvar</button>
-              <button class="btn-secondary" onclick="clearOwnerForm()">Limpar</button>
-            </div>
-          </div>
-          <div class="card crud-list-container">
-            <h3>Registros</h3>
-            <div class="table-wrapper">
-              <table>
-                <thead><tr><th>Cód</th><th>Nome</th><th>CPF/CNPJ</th><th>Tel</th><th>Ações</th></tr></thead>
-                <tbody id="owner-list-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="view-frentes" class="view-section hidden">
-      <div class="crud-container">
-        <header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header>
-        <div class="crud-body">
-          <div class="card crud-form">
-            <h3>Novo / Editar</h3>
-            <input type="hidden" id="front-id">
-            <div class="form-group row">
-              <div style="flex:1"><label>Cód.</label><input id="front-cod" type="text"></div>
-              <div style="flex:3"><label>Nome *</label><input id="front-name" type="text"></div>
-            </div>
-            <div class="buttons">
-              <button class="primary" onclick="saveFront()"><i class="fa-solid fa-save"></i> Salvar</button>
-              <button class="btn-secondary" onclick="clearFrontForm()">Limpar</button>
-            </div>
-          </div>
-          <div class="card crud-list-container">
-            <h3>Registros</h3>
-            <div class="table-wrapper">
-              <table>
-                <thead><tr><th>Cód</th><th>Nome</th><th>Ações</th></tr></thead>
-                <tbody id="front-list-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="view-producao" class="view-section hidden">
-      <div class="empty-state">
-        <i class="fa-solid fa-boxes-stacked fa-4x"></i>
-        <h2>Módulo de Produção</h2>
-        <p>Lançamento de produção por fazenda/talhão.</p>
-        <span class="badge-dev">Em Desenvolvimento</span>
-      </div>
-    </div>
-
-    <div id="view-queima" class="view-section hidden">
-      <div class="empty-state">
-        <i class="fa-solid fa-fire fa-4x"></i>
-        <h2>Controle de Queima</h2>
-        <p>Monitoramento de horas de queima.</p>
-        <span class="badge-dev">Em Desenvolvimento</span>
-      </div>
-    </div>
-
+    <div id="view-dashboard" class="view-section active"><div class="dashboard-container"><div id="map-dashboard"></div><div class="dashboard-overlay"><div class="stats-card"><h3><i class="fa-solid fa-chart-simple"></i> Visão Geral</h3><div class="total-area-box"><span class="label">Área Total Cadastrada</span><span class="value" id="dash-total-area">0.00 ha</span></div><h4>Top 5 Fornecedores (Área)</h4><ul id="dash-top5-list" class="top5-list"><li>Carregando dados...</li></ul></div></div></div></div>
+    <div id="view-fazendas" class="view-section hidden"><aside id="map-sidebar"><header><h2><i class="fa-solid fa-wheat"></i> Gestão de Fazendas</h2></header><section class="card"><div class="card-header"><h3>Nova Fazenda</h3></div><div class="form-group row"><div style="flex: 1;"><label>Cód. *</label><input id="input-cod" type="text" placeholder="001" /></div><div style="flex: 2;"><label>Nome *</label><input id="input-name" type="text" placeholder="Fazenda..." /></div></div><div class="form-group"><label>Proprietário (Pesquisar) *</label><input list="owners-list" id="input-owner" class="full-width" placeholder="Digite para buscar..."><datalist id="owners-list"></datalist><small class="hint-link" onclick="switchView('proprietarios')">+ Cadastrar Novo</small></div><div class="file-input-wrapper"><label>Shapefile (.zip / .shp)</label><label for="input-shp" class="btn-secondary"><i class="fa-solid fa-upload"></i> Carregar Arquivo</label><input id="input-shp" type="file" accept=".zip,.shp" style="display:none" /></div><div class="buttons"><button id="btn-open-save" class="primary"><i class="fa-solid fa-list-check"></i> Revisar & Salvar</button><button id="btn-cancel-edit" class="btn-danger hidden" onclick="cancelEditFarm()">Cancelar</button></div></section><section class="card list-card"><h3>Fazendas Cadastradas</h3><div id="farm-list" class="farm-list">Carregando...</div></section></aside><main id="map-container"><div id="map"></div></main></div>
+    <div id="view-proprietarios" class="view-section hidden"><div class="crud-container"><header class="crud-header"><h2><i class="fa-solid fa-user-tie"></i> Proprietários</h2></header><div class="crud-body"><div class="card crud-form"><h3>Novo / Editar</h3><input type="hidden" id="owner-id"><div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="owner-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="owner-name" type="text"></div></div><div class="form-group row"><div style="flex:1"><label>CPF/CNPJ</label><input id="owner-cpf" type="text"></div><div style="flex:1"><label>Telefone</label><input id="owner-tel" type="text"></div></div><div class="buttons"><button class="primary" onclick="saveOwner()"><i class="fa-solid fa-save"></i> Salvar</button><button class="btn-secondary" onclick="clearOwnerForm()">Limpar</button></div></div><div class="card crud-list-container"><h3>Registros</h3><div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>CPF/CNPJ</th><th>Tel</th><th>Ações</th></tr></thead><tbody id="owner-list-body"></tbody></table></div></div></div></div></div>
+    <div id="view-frentes" class="view-section hidden"><div class="crud-container"><header class="crud-header"><h2><i class="fa-solid fa-users-gear"></i> Frentes</h2></header><div class="crud-body"><div class="card crud-form"><h3>Novo / Editar</h3><input type="hidden" id="front-id"><div class="form-group row"><div style="flex:1"><label>Cód.</label><input id="front-cod" type="text"></div><div style="flex:3"><label>Nome *</label><input id="front-name" type="text"></div></div><div class="buttons"><button class="primary" onclick="saveFront()"><i class="fa-solid fa-save"></i> Salvar</button><button class="btn-secondary" onclick="clearFrontForm()">Limpar</button></div></div><div class="card crud-list-container"><h3>Registros</h3><div class="table-wrapper"><table><thead><tr><th>Cód</th><th>Nome</th><th>Ações</th></tr></thead><tbody id="front-list-body"></tbody></table></div></div></div></div></div>
+    <div id="view-producao" class="view-section hidden"><div class="empty-state"><i class="fa-solid fa-boxes-stacked fa-4x"></i><h2>Módulo de Produção</h2><p>Lançamento de produção por fazenda/talhão.</p><span class="badge-dev">Em Desenvolvimento</span></div></div>
+    <div id="view-queima" class="view-section hidden"><div class="empty-state"><i class="fa-solid fa-fire fa-4x"></i><h2>Controle de Queima</h2><p>Monitoramento de horas de queima.</p><span class="badge-dev">Em Desenvolvimento</span></div></div>
   </div>
 
-  <div id="modal-overlay" class="hidden">
-    <div class="modal">
-      <div class="modal-header"><h3 id="modal-title">Gerenciar Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div>
-      <div class="modal-body">
-        <div id="modal-summary" class="summary-box"></div>
-        <div class="table-container">
-          <table id="talhoes-table"><thead><tr><th>Talhão</th><th>Área (ha)</th><th>Ação</th></tr></thead><tbody id="talhoes-tbody"></tbody></table>
-        </div>
-      </div>
-      <div class="modal-footer" id="modal-footer-actions"></div>
-    </div>
-  </div>
-
+  <div id="modal-overlay" class="hidden"><div class="modal"><div class="modal-header"><h3 id="modal-title">Gerenciar Talhões</h3><button id="btn-close-modal" class="close-btn">&times;</button></div><div class="modal-body"><div id="modal-summary" class="summary-box"></div><div class="table-container"><table id="talhoes-table"><thead><tr><th>Talhão</th><th>Área (ha)</th><th>Ação</th></tr></thead><tbody id="talhoes-tbody"></tbody></table></div></div><div class="modal-footer" id="modal-footer-actions"></div></div></div>
   <div id="toast-container"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -218,5 +76,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
   
   <script src="js/config.js"></script>
-  <script src="js/app.js"></script>           <script src="js/proprietarios.js"></script>  <script src="js/frentes.js"></script>        <script src="js/fazendas.js"></script>       </body>
+  <script src="js/app.js"></script>
+  <script src="js/proprietarios.js"></script>
+  <script src="js/frentes.js"></script>
+  <script src="js/fazendas.js"></script>
+</body>
 </html>

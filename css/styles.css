@@ -21,7 +21,19 @@ body { margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 #main-nav:hover { width: 240px; }
 
-.nav-brand { font-size: 22px; color: var(--primary); margin-bottom: 20px; width: 100%; text-align: center; }
+/* Header da Marca */
+.nav-brand { 
+  font-size: 22px; color: var(--primary); margin-bottom: 25px; width: 100%; 
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; overflow: hidden;
+  height: 40px;
+}
+.nav-brand i { min-width: 70px; text-align: center; }
+.brand-text {
+  opacity: 0; transition: opacity 0.2s ease-in; font-weight: bold; font-size: 16px; letter-spacing: 1px;
+}
+#main-nav:hover .brand-text { opacity: 1; }
+
 .nav-divider { width: 80%; height: 1px; background: var(--border); margin: 10px auto; }
 .nav-group-simple, .nav-group-dropdown { width: 100%; margin-bottom: 5px; }
 
@@ -30,29 +42,43 @@ body { margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   width: 100%; background: transparent; color: var(--text-muted); border: none; padding: 12px 0;
   cursor: pointer; display: flex; align-items: center; font-size: 14px; transition: all 0.2s; text-decoration: none;
 }
+/* Quando o menu está fechado, o span fica invisível, mas ocupa 0 espaço para não quebrar */
 .nav-btn i { min-width: 70px; text-align: center; font-size: 18px; }
-.nav-btn span { opacity: 0; transition: opacity 0.2s; white-space: nowrap; display: block; }
+.nav-btn span { opacity: 0; transition: opacity 0.2s; white-space: nowrap; display: block; padding-left: 10px;}
 #main-nav:hover .nav-btn span { opacity: 1; }
+
 .nav-btn:hover, .nav-btn.active { background: rgba(16, 185, 129, 0.1); color: var(--primary); }
 .nav-btn.active { border-right: 3px solid var(--primary); }
 
-/* Submenu (Cadastros) */
+/* --- SUBMENU (Ajuste Visual) --- */
 .submenu-container {
   max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out;
-  background: rgba(0,0,0,0.2);
+  /* Removido o background escuro para parecer integrado */
+  background: transparent; 
+  width: 100%;
 }
-.submenu-container.open { max-height: 500px; } /* Altura suficiente para exibir */
+.submenu-container.open { max-height: 500px; }
 
-.sub-btn { padding-left: 0; } /* Reseta padding */
-.sub-btn i { font-size: 14px; min-width: 70px; } /* Ícones menores no submenu */
+.sub-btn { 
+  padding-left: 0; 
+  color: #64748b; /* Cor um pouco mais escura para diferenciar hierarquia */
+} 
+.sub-btn:hover { color: var(--primary); background: transparent; } /* Hover suave */
+.sub-btn.active { color: var(--primary); background: transparent; border-right: 3px solid var(--primary); }
+
+/* Ícones do submenu levemente menores */
+.sub-btn i { font-size: 14px; min-width: 70px; } 
 .sub-btn span { font-size: 13px; }
 
 /* Setinha do Dropdown */
-.arrow-icon { font-size: 12px !important; min-width: 30px !important; transition: transform 0.3s; opacity: 0; }
+.arrow-icon { 
+  font-size: 12px !important; min-width: 30px !important; 
+  transition: transform 0.3s; opacity: 0; margin-right: 10px;
+}
 #main-nav:hover .arrow-icon { opacity: 1; }
 .nav-group-dropdown.open .arrow-icon { transform: rotate(180deg); }
 
-/* --- RESTANTE DOS ESTILOS MANTIDOS --- */
+/* --- RESTANTE DOS ESTILOS (Mantidos) --- */
 #content-area { flex: 1; position: relative; overflow: hidden; height: 100%; }
 .view-section { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; background: var(--bg-dark); }
 .view-section.active { display: flex !important; }
