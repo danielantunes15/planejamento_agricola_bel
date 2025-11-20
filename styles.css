@@ -378,3 +378,38 @@ tr:hover { background: rgba(255,255,255,0.02); }
   cursor: pointer;
   border-radius: 4px;
 }
+
+/* RÓTULOS NO MAPA */
+.talhao-label {
+  background: transparent; /* Fundo transparente */
+  border: none;
+  box-shadow: none;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-weight: 900; /* Bem grosso */
+  font-size: 14px;  /* Tamanho fixo, não some no zoom */
+  text-align: center;
+  text-shadow: 
+    -2px -2px 0 #000,  
+     2px -2px 0 #000,
+    -2px  2px 0 #000,
+     2px  2px 0 #000; /* Contorno preto forte */
+  white-space: nowrap;
+}
+
+/* Remove setinha do tooltip */
+.leaflet-tooltip-top:before, 
+.leaflet-tooltip-bottom:before, 
+.leaflet-tooltip-left:before, 
+.leaflet-tooltip-right:before {
+  display: none; 
+}
+
+/* Estilo do Popup de Edição */
+.edit-popup-form {
+  display: flex; flex-direction: column; gap: 5px; min-width: 180px;
+}
+.edit-popup-form label { color: #333; font-size: 12px; margin: 0; font-weight: 600; }
+.edit-popup-form input { 
+  border: 1px solid #ccc; background: #fff; color: #000; padding: 6px; border-radius: 4px; 
+}
