@@ -13,94 +13,83 @@
 * { box-sizing: border-box; outline: none; }
 body { margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
 
-/* MENU LATERAL */
+/* --- MENU LATERAL --- */
 #main-nav {
   width: 70px; background: var(--nav-bg); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 2000;
   transition: width 0.3s ease; overflow-x: hidden;
 }
 #main-nav:hover { width: 240px; }
-.nav-brand { font-size: 22px; color: var(--primary); margin-bottom: 20px; width: 100%; text-align: center; }
-.nav-group { width: 100%; margin-bottom: 10px; }
-.nav-divider { width: 80%; height: 1px; background: var(--border); margin: 10px auto; }
-.nav-group label { padding-left: 20px; font-size: 10px; color: var(--text-muted); margin-bottom: 5px; display: none; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
-#main-nav:hover .nav-group label { display: block; }
 
+.nav-brand { font-size: 22px; color: var(--primary); margin-bottom: 20px; width: 100%; text-align: center; }
+.nav-divider { width: 80%; height: 1px; background: var(--border); margin: 10px auto; }
+.nav-group-simple, .nav-group-dropdown { width: 100%; margin-bottom: 5px; }
+
+/* Botões do Menu */
 .nav-btn {
   width: 100%; background: transparent; color: var(--text-muted); border: none; padding: 12px 0;
   cursor: pointer; display: flex; align-items: center; font-size: 14px; transition: all 0.2s; text-decoration: none;
 }
 .nav-btn i { min-width: 70px; text-align: center; font-size: 18px; }
-.nav-btn span { opacity: 0; transition: opacity 0.2s; white-space: nowrap; }
+.nav-btn span { opacity: 0; transition: opacity 0.2s; white-space: nowrap; display: block; }
 #main-nav:hover .nav-btn span { opacity: 1; }
-.nav-btn:hover, .nav-btn.active { background: rgba(16, 185, 129, 0.1); color: var(--primary); border-right: 3px solid var(--primary); }
+.nav-btn:hover, .nav-btn.active { background: rgba(16, 185, 129, 0.1); color: var(--primary); }
+.nav-btn.active { border-right: 3px solid var(--primary); }
 
-/* ÁREA DE CONTEÚDO */
-#content-area { flex: 1; position: relative; overflow: hidden; height: 100%; }
-.view-section {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  display: none; 
-  background: var(--bg-dark);
+/* Submenu (Cadastros) */
+.submenu-container {
+  max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out;
+  background: rgba(0,0,0,0.2);
 }
+.submenu-container.open { max-height: 500px; } /* Altura suficiente para exibir */
+
+.sub-btn { padding-left: 0; } /* Reseta padding */
+.sub-btn i { font-size: 14px; min-width: 70px; } /* Ícones menores no submenu */
+.sub-btn span { font-size: 13px; }
+
+/* Setinha do Dropdown */
+.arrow-icon { font-size: 12px !important; min-width: 30px !important; transition: transform 0.3s; opacity: 0; }
+#main-nav:hover .arrow-icon { opacity: 1; }
+.nav-group-dropdown.open .arrow-icon { transform: rotate(180deg); }
+
+/* --- RESTANTE DOS ESTILOS MANTIDOS --- */
+#content-area { flex: 1; position: relative; overflow: hidden; height: 100%; }
+.view-section { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; background: var(--bg-dark); }
 .view-section.active { display: flex !important; }
 
-/* --- DASHBOARD STYLES (NOVO) --- */
+/* Dashboard */
 #view-dashboard { position: relative; }
 .dashboard-container { width: 100%; height: 100%; position: relative; }
 #map-dashboard { width: 100%; height: 100%; z-index: 1; }
-.dashboard-overlay {
-  position: absolute; top: 20px; left: 20px; z-index: 1000;
-  width: 300px; max-height: 90%; overflow-y: auto;
-}
-.stats-card {
-  background: rgba(30, 41, 59, 0.95); /* Semi-transparent dark */
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-  backdrop-filter: blur(5px);
-}
+.dashboard-overlay { position: absolute; top: 20px; left: 20px; z-index: 1000; width: 300px; max-height: 90%; overflow-y: auto; }
+.stats-card { background: rgba(30, 41, 59, 0.95); border: 1px solid var(--border); border-radius: 8px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
 .stats-card h3 { margin: 0 0 15px 0; font-size: 18px; color: var(--primary); display: flex; align-items: center; gap: 10px; }
 .stats-card h4 { margin: 20px 0 10px 0; font-size: 14px; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-
 .total-area-box { text-align: center; background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 6px; border: 1px solid var(--primary); }
 .total-area-box .label { display: block; font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
 .total-area-box .value { display: block; font-size: 24px; font-weight: bold; color: #fff; margin-top: 5px; }
-
 .top5-list { list-style: none; padding: 0; margin: 0; }
-.top5-list li { 
-  display: flex; justify-content: space-between; align-items: center; 
-  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); 
-}
+.top5-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .top5-list li:last-child { border-bottom: none; }
 .top5-name { font-weight: 600; font-size: 14px; }
 .top5-val { font-size: 13px; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
 .top5-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.1); margin-top: 5px; border-radius: 2px; overflow: hidden; }
 .top5-bar-fill { height: 100%; background: var(--primary); border-radius: 2px; }
 
-/* EMPTY STATES (PÁGINAS NOVAS) */
-.empty-state {
-  width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center;
-  color: var(--text-muted); text-align: center;
-}
-.empty-state h2 { color: var(--text-main); margin-top: 20px; }
-.badge-dev { margin-top: 15px; background: #f59e0b; color: #000; padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
-
-
-/* TELA FAZENDAS (ANTIGA) */
+/* Layouts View */
 #view-fazendas.active { flex-direction: row; }
 #map-sidebar { width: 360px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 15px; gap: 15px; overflow-y: auto; z-index: 1000; }
 #map-container { flex: 1; position: relative; }
 #map { width: 100%; height: 100%; }
 
-/* TELAS CRUD */
+/* CRUD Geral */
 .crud-container { width: 100%; height: 100%; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; max-width: 1000px; margin: 0 auto; }
 .crud-header h2 { color: var(--primary); margin: 0; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
 .crud-body { display: flex; flex-direction: column; gap: 20px; }
 .crud-form { background: var(--bg-card); padding: 20px; border-radius: 8px; border: 1px solid var(--border); }
 .crud-list-container { flex: 1; }
 
-/* ELEMENTOS UI */
+/* UI Elements */
 .card { background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
 .form-group { margin-bottom: 12px; }
 .form-group.row { display: flex; gap: 10px; align-items: flex-end; }
@@ -114,23 +103,18 @@ button:hover { opacity: 0.9; }
 .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; width: 100%; display: block; box-sizing: border-box; padding: 10px; text-align: center; cursor: pointer; border-radius: 4px;}
 .btn-danger { background: rgba(239, 68, 68, 0.2); color: #ef4444; margin-top: 5px; width: 100%; }
 .hint-link { color: var(--primary); cursor: pointer; font-size: 11px; margin-top: 4px; display: inline-block; }
-
-/* TABELAS */
 table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
 th { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
 td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 tr:hover { background: rgba(255,255,255,0.03); }
 .btn-icon { background: transparent; color: var(--text-muted); padding: 6px; font-size: 14px; border-radius: 4px; }
 .btn-icon:hover { color: var(--primary); background: rgba(255,255,255,0.05); }
-
-/* RÓTULOS E MODAL */
 .talhao-label { background: transparent; border: none; box-shadow: none; color: #fff; font-family: 'Segoe UI', sans-serif; font-weight: 700; font-size: 13px; text-align: center; text-shadow: 0px 1px 3px rgba(0,0,0,0.9); transition: opacity 0.3s; opacity: 1; visibility: visible; }
 .hide-labels .talhao-label { opacity: 0 !important; visibility: hidden !important; }
 .leaflet-tooltip-top:before { display: none; }
 .edit-popup-form { display: flex; flex-direction: column; gap: 5px; min-width: 180px; }
 .edit-popup-form label { color: #333; font-size: 12px; font-weight: 600; }
 .edit-popup-form input { background: #fff; color: #000; border: 1px solid #ccc; padding: 5px; }
-
 .hidden { display: none !important; }
 #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:3000; display:flex; justify-content:center; align-items:center; }
 .modal { background: var(--bg-card); width: 600px; max-height: 80vh; border-radius: 8px; border: 1px solid var(--border); display:flex; flex-direction:column; }
@@ -141,12 +125,14 @@ tr:hover { background: rgba(255,255,255,0.03); }
 #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 4000; }
 .toast { background: var(--bg-card); padding: 15px; margin-top: 10px; border-left: 4px solid var(--primary); border-radius: 4px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); color: #fff; display: flex; gap: 10px; align-items: center; animation: slideIn 0.3s; }
 .toast.error { border-left-color: var(--danger); }
+.empty-state { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--text-muted); text-align: center; }
+.empty-state h2 { color: var(--text-main); margin-top: 20px; }
+.badge-dev { margin-top: 15px; background: #f59e0b; color: #000; padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
 @media (max-width: 768px) { 
   #main-nav { width: 100%; height: 60px; flex-direction: row; padding: 0 10px; overflow: hidden; border-bottom: 1px solid var(--border); } 
   #main-nav:hover { height: auto; flex-direction: column; }
-  .nav-brand { display: none; } /* Simplifica mobile */
+  .nav-brand { display: none; } 
   #view-fazendas { flex-direction: column; }
   #map-sidebar { width: 100%; height: 40%; order: 2; }
   #map-container { height: 60%; order: 1; }
