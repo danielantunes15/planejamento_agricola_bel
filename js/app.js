@@ -9,13 +9,13 @@ if (typeof proj4 !== 'undefined') {
 }
 const USINA_COORDS = [-17.643763707243053, -40.18234136873469];
 
-// Paleta de Cores (Cores mais vivas para contraste com satélite)
-const TOP_5_COLORS = ['#00ff7f', '#00bfff', '#ffd700', '#ff1493', '#9370db']; // SpringGreen, DeepSkyBlue, Gold, DeepPink, MediumPurple
-const OTHER_COLOR = '#a9a9a9'; // DarkGray
+// Paleta de Cores
+const TOP_5_COLORS = ['#00ff7f', '#00bfff', '#ffd700', '#ff1493', '#9370db']; 
+const OTHER_COLOR = '#a9a9a9'; 
 
 // Variáveis Globais
 let dashboardChart = null;
-let currentMapMode = 'owners'; // 'owners' ou 'productivity'
+let currentMapMode = 'owners'; 
 
 // --- UX & HELPERS ---
 window.toggleLoader = function(show) {
@@ -98,8 +98,10 @@ async function loadDashboardData() {
         L.control.layers({ "Modo Escuro": darkModeGroup, "Satélite": googleHybrid }).addTo(mapDash);
         layerGroupDash = L.featureGroup().addTo(mapDash);
 
+        // Controle de visibilidade dos rótulos baseado no Zoom
         const updateLabels = () => {
             const div = document.getElementById('map-dashboard');
+            // Só mostra rótulos se zoom >= 15
             if(mapDash.getZoom() < 15) div.classList.add('hide-labels');
             else div.classList.remove('hide-labels');
         };
@@ -152,19 +154,30 @@ async function loadDashboardData() {
         feats.forEach(ft => {
              ft.properties.owner = owner;
              
-             // --- CORREÇÃO AQUI: Contorno da MESMA cor do preenchimento ---
+             // Calcula área individual do talhão para exibir no rótulo
+             let talhaoArea = 0;
+             try {
+                 if(ft.properties.area_manual) talhaoArea = parseFloat(ft.properties.area_manual);
+                 else talhaoArea = (turf.area(ft) / 10000);
+             } catch(e) { talhaoArea = 0; }
+
              const layer = L.geoJSON(ft, { 
                  style: { 
-                     color: color,      // Contorno da mesma cor
-                     weight: 2,         // Espessura média
-                     opacity: 1,        // Contorno sólido (sem transparência)
-                     fillColor: color,  // Preenchimento da mesma cor
-                     fillOpacity: 0.4   // Preenchimento suave para ver o solo
+                     stroke: false,     // <--- CONTORNO REMOVIDO (Visual limpo)
+                     fillColor: color,  
+                     fillOpacity: 0.6,  // Um pouco mais opaco para ver bem a cor
+                     interactive: true  // Permite clicar/hover
                  } 
              });
              
+             // Formatação do Rótulo: Nome + Área
              const labelName = (ft.properties.talhao || 'T-?').replace(/Talhão\s*/i,'');
-             layer.bindTooltip(labelName, { 
+             const labelHtml = `<div style="text-align:center; line-height:1.1;">
+                                    <span style="font-size:13px; font-weight:900;">${labelName}</span><br>
+                                    <span style="font-size:10px; font-weight:400;">${talhaoArea.toFixed(2)} ha</span>
+                                </div>`;
+
+             layer.bindTooltip(labelHtml, { 
                  direction:'center', className:'talhao-label', permanent: true 
              });
              
@@ -175,7 +188,7 @@ async function loadDashboardData() {
     
     if(farms.length > 0) mapDash.fitBounds(bounds, { padding: [50, 50] });
 
-    // Atualiza Lista
+    // Atualiza Lista Lateral
     const listEl = document.getElementById('dash-top5-list');
     const totalEl = document.getElementById('dash-total-area');
 
@@ -186,8 +199,9 @@ async function loadDashboardData() {
     top5.forEach((item, index) => {
         const percent = (item.area / maxArea) * 100;
         const color = TOP_5_COLORS[index];
+        // Adicionado title e ponteiro
         listEl.innerHTML += `
-            <li onclick="filterDashboardMap('${item.name}')" style="cursor:pointer" title="Filtrar por ${item.name}">
+            <li onclick="filterDashboardMap('${item.name}')" style="cursor:pointer" title="Filtrar e Aproximar">
                 <div class="top5-header">
                     <span class="top5-name">
                         <span class="legend-dot" style="background:${color}"></span>
@@ -203,7 +217,7 @@ async function loadDashboardData() {
 
     if(others.length > 0) {
         listEl.innerHTML += `
-           <li onclick="filterDashboardMap(null)" style="cursor:pointer; margin-top:10px; border-top:1px dashed #444; padding-top:8px;">
+           <li onclick="filterDashboardMap(null)" style="cursor:pointer; margin-top:10px; border-top:1px dashed #444; padding-top:8px;" title="Mostrar todos">
                <div class="top5-header">
                    <span class="top5-name">
                        <span class="legend-dot" style="background:${OTHER_COLOR}"></span>
@@ -220,6 +234,7 @@ async function loadDashboardData() {
     renderChart();
 }
 
+// --- GRÁFICO (Chart.js) ---
 async function renderChart() {
     const ctx = document.getElementById('chart-producao');
     if(!ctx) return;
@@ -260,6 +275,7 @@ async function renderChart() {
     });
 }
 
+// --- CLIMA ---
 async function fetchWeather() {
     const lat = USINA_COORDS[0];
     const lng = USINA_COORDS[1];
@@ -271,7 +287,6 @@ async function fetchWeather() {
             const code = data.current_weather.weathercode;
             let desc = "Limpo";
             if(code > 3) desc = "Nublado";
-            if(code > 45) desc = "Nevoeiro";
             if(code > 50) desc = "Chuva";
             if(code > 95) desc = "Tempestade";
             document.getElementById('weather-desc').innerText = desc;
@@ -279,6 +294,7 @@ async function fetchWeather() {
     } catch(e) { console.error("Erro clima", e); }
 }
 
+// --- INTERAÇÕES DO MAPA ---
 window.setMapMode = function(mode) {
     currentMapMode = mode;
     document.querySelectorAll('.map-ctrl-btn').forEach(b => b.classList.remove('active'));
@@ -287,27 +303,67 @@ window.setMapMode = function(mode) {
     loadDashboardData();
 };
 
+// --- NOVA LÓGICA DE FILTRO E ZOOM ---
 window.filterDashboardMap = function(ownerName) {
     if(!layerGroupDash) return;
+    
+    let bounds = L.latLngBounds(); // Coletar limites para zoom
+    let hasLayers = false;
+
     layerGroupDash.eachLayer(layer => {
         let featOwner = null;
         if(layer.feature && layer.feature.properties) featOwner = layer.feature.properties.owner;
         
-        if(!ownerName || featOwner === ownerName) {
-            // Destaca usando a cor original da feature (recuperada do style atual ou recalculada)
-            // Para simplificar, forçamos opacidade alta
-            const currentColor = layer.options.color || '#fff'; 
-            layer.setStyle({ fillOpacity: 0.6, opacity: 1, weight: 3, color: currentColor });
-            if(featOwner === ownerName) layer.bringToFront();
+        // Se ownerName for nulo (clicou em Outros ou Limpar), mostra tudo
+        // Se ownerName for definido, mostra só os que batem
+        const match = !ownerName || (ownerName && featOwner === ownerName);
+
+        if(match) {
+            // Destaca
+            const currentColor = layer.options.fillColor || '#fff'; // Usa a cor original de preenchimento
+            layer.setStyle({ 
+                fillOpacity: 0.8, 
+                opacity: 0, // Garante que a borda (stroke) continue invisivel
+                stroke: false 
+            });
+            
+            // Adiciona aos limites de zoom se estiver filtrando um dono específico
+            if(ownerName) {
+                if(layer.getBounds) bounds.extend(layer.getBounds());
+                layer.bringToFront();
+            } else {
+                // Se for "Mostrar Todos", reseta estilo padrão
+                layer.setStyle({ fillOpacity: 0.6 });
+            }
+            
+            // Reabilita Tooltip se estava escondido
+            if(layer.getTooltip()) layer.openTooltip();
+            hasLayers = true;
+
         } else {
-            layer.setStyle({ fillOpacity: 0.1, opacity: 0.1, weight: 0 });
+            // Ofusca os não selecionados
+            layer.setStyle({ fillOpacity: 0.1, stroke: false });
+            if(layer.getTooltip()) layer.closeTooltip();
         }
     });
-    if(ownerName) showToast(`Filtrado: ${ownerName}`);
-    else showToast('Filtro Limpo');
+    
+    // Zoom Inteligente
+    if(ownerName && hasLayers && bounds.isValid()) {
+        mapDash.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        showToast(`Filtrado: ${ownerName}`);
+    } else if(!ownerName) {
+        // Se limpou o filtro, foca em tudo (Usina + Fazendas)
+        // Recalcular bounds totais seria ideal, mas um zoom out geral resolve
+        const allBounds = layerGroupDash.getBounds();
+        if(allBounds.isValid()) mapDash.fitBounds(allBounds, { padding: [50, 50] });
+        showToast('Mostrando Todos');
+    } else {
+        showToast('Nenhuma área encontrada para este filtro', 'error');
+    }
 };
 
 document.getElementById('btn-close-modal').onclick = () => document.getElementById('modal-overlay').classList.add('hidden');
 window.addEventListener('resize', () => { if(mapDash) mapDash.invalidateSize(); });
 
+// Inicialização
 loadDashboardData();
