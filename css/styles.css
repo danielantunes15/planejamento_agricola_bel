@@ -208,3 +208,21 @@ button:hover { opacity: 0.9; }
   .form-sidebar { width: 100%; height: 40%; border-right: 0; border-bottom: 1px solid var(--border); }
   .filter-controls { flex-direction: column; width: 100%; }
 }
+/* Adicionar no final do css/styles.css se não existir */
+
+.talhao-label {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    transition: opacity 0.3s ease-in-out; /* Suaviza o aparecer/desaparecer */
+}
+
+/* Quando a classe hide-labels estiver na div do mapa, os rótulos ficam invisíveis */
+.hide-labels .talhao-label {
+    opacity: 0 !important;
+    visibility: hidden !important;
+}

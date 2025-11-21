@@ -9,14 +9,15 @@ if (typeof proj4 !== 'undefined') {
 }
 const USINA_COORDS = [-17.643763707243053, -40.18234136873469];
 
-const TOP_5_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'];
-const OTHER_COLOR = '#64748b';
+// Paleta de Cores (Cores mais vivas para contraste com satélite)
+const TOP_5_COLORS = ['#00ff7f', '#00bfff', '#ffd700', '#ff1493', '#9370db']; // SpringGreen, DeepSkyBlue, Gold, DeepPink, MediumPurple
+const OTHER_COLOR = '#a9a9a9'; // DarkGray
 
-// Global Vars
+// Variáveis Globais
 let dashboardChart = null;
-let currentMapMode = 'owners'; // 'owners' or 'productivity'
+let currentMapMode = 'owners'; // 'owners' ou 'productivity'
 
-// UX
+// --- UX & HELPERS ---
 window.toggleLoader = function(show) {
     const overlay = document.getElementById('loading-overlay');
     if(show) overlay.classList.remove('hidden');
@@ -32,7 +33,7 @@ window.showToast = function(msg, type = 'success') {
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 };
 
-// NAVEGAÇÃO
+// --- NAVEGAÇÃO ---
 window.switchView = function(viewId) {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     const activeBtn = document.querySelector(`.nav-btn[onclick="switchView('${viewId}')"]`);
@@ -63,18 +64,23 @@ window.switchView = function(viewId) {
 
 window.toggleSubmenu = function(id) {
     const submenu = document.getElementById(`submenu-${id}`);
-    const parent = submenu.previousElementSibling.parentElement;
+    const btn = submenu.previousElementSibling;
+    const parent = btn.parentElement;
+    
     if(submenu.classList.contains('open')) {
         submenu.classList.remove('open');
         parent.classList.remove('open');
     } else {
-        document.querySelectorAll('.submenu-container').forEach(s => { s.classList.remove('open'); s.parentElement.classList.remove('open'); });
+        document.querySelectorAll('.submenu-container').forEach(s => { 
+            s.classList.remove('open'); 
+            s.parentElement.classList.remove('open'); 
+        });
         submenu.classList.add('open');
         parent.classList.add('open');
     }
 };
 
-// DASHBOARD
+// --- DASHBOARD ---
 let mapDash = null;
 let layerGroupDash = null;
 
@@ -91,48 +97,77 @@ async function loadDashboardData() {
         L.control.zoom({ position: 'topright' }).addTo(mapDash);
         L.control.layers({ "Modo Escuro": darkModeGroup, "Satélite": googleHybrid }).addTo(mapDash);
         layerGroupDash = L.featureGroup().addTo(mapDash);
+
+        const updateLabels = () => {
+            const div = document.getElementById('map-dashboard');
+            if(mapDash.getZoom() < 15) div.classList.add('hide-labels');
+            else div.classList.remove('hide-labels');
+        };
+        mapDash.on('zoomend', updateLabels);
+        updateLabels();
     }
     setTimeout(() => mapDash.invalidateSize(), 200);
 
-    const listEl = document.getElementById('dash-top5-list');
-    const totalEl = document.getElementById('dash-total-area');
-    
-    // Carregar Fazendas
     const { data: farms } = await sb.from('fazendas').select('*');
     if(!farms) return;
 
+    // Estatísticas
     let totalArea = 0;
     let ownerStats = {};
 
-    // Preparar dados e mapa
+    farms.forEach(f => {
+        const area = Number(f.area_ha || 0);
+        totalArea += area;
+        const owner = f.owner || 'Não Definido';
+        if(!ownerStats[owner]) ownerStats[owner] = 0;
+        ownerStats[owner] += area;
+    });
+
+    let sortedOwners = Object.keys(ownerStats)
+        .map(k => ({ name: k, area: ownerStats[k] }))
+        .sort((a, b) => b.area - a.area);
+    
+    const top5 = sortedOwners.slice(0, 5);
+    const others = sortedOwners.slice(5);
+    const othersArea = others.reduce((acc, curr) => acc + curr.area, 0);
+
+    const ownerColors = {};
+    top5.forEach((item, index) => ownerColors[item.name] = TOP_5_COLORS[index]);
+
+    // Desenha Mapa
     layerGroupDash.clearLayers();
     let bounds = L.latLngBounds([USINA_COORDS]);
 
     farms.forEach(f => {
-        totalArea += Number(f.area_ha || 0);
         const owner = f.owner || 'Não Definido';
-        if(!ownerStats[owner]) ownerStats[owner] = 0;
-        ownerStats[owner] += Number(f.area_ha || 0);
+        let color = OTHER_COLOR;
+        
+        if(currentMapMode === 'owners') {
+            if(ownerColors[owner]) color = ownerColors[owner];
+        } else {
+            color = Math.random() > 0.5 ? '#10b981' : '#ef4444';
+        }
 
-        // Mapa
         const feats = f.geojson.features || [f.geojson];
         feats.forEach(ft => {
              ft.properties.owner = owner;
-             // Lógica de Cor
-             let color = OTHER_COLOR;
-             if(currentMapMode === 'owners') {
-                 // Simplificado: cor fixa ou aleatória, aqui usando Other por padrão se não estiver no Top 5
-                 // Para ficar perfeito, precisaria recalcular o Top 5 antes de desenhar
-             } else {
-                 // Modo Produtividade (Mockup - futuramente conectar com tabela producao)
-                 // Aqui vamos simular: talhões aleatórios verdes ou vermelhos
-                 color = Math.random() > 0.5 ? '#10b981' : '#ef4444'; 
-             }
              
+             // --- CORREÇÃO AQUI: Contorno da MESMA cor do preenchimento ---
              const layer = L.geoJSON(ft, { 
-                 style: { color: '#fff', weight: 1, fillColor: color, fillOpacity: 0.5 } 
+                 style: { 
+                     color: color,      // Contorno da mesma cor
+                     weight: 2,         // Espessura média
+                     opacity: 1,        // Contorno sólido (sem transparência)
+                     fillColor: color,  // Preenchimento da mesma cor
+                     fillOpacity: 0.4   // Preenchimento suave para ver o solo
+                 } 
              });
-             layer.bindTooltip(ft.properties.talhao || 'Talhão', { direction:'center', className:'talhao-label', permanent: true });
+             
+             const labelName = (ft.properties.talhao || 'T-?').replace(/Talhão\s*/i,'');
+             layer.bindTooltip(labelName, { 
+                 direction:'center', className:'talhao-label', permanent: true 
+             });
+             
              layerGroupDash.addLayer(layer);
              if(layer.getBounds().isValid()) bounds.extend(layer.getBounds());
         });
@@ -140,69 +175,63 @@ async function loadDashboardData() {
     
     if(farms.length > 0) mapDash.fitBounds(bounds, { padding: [50, 50] });
 
-    // Ordenar Top 5
-    let sortedOwners = Object.keys(ownerStats).map(k => ({ name: k, area: ownerStats[k] })).sort((a, b) => b.area - a.area);
-    const top5 = sortedOwners.slice(0, 5);
-    const others = sortedOwners.slice(5);
+    // Atualiza Lista
+    const listEl = document.getElementById('dash-top5-list');
+    const totalEl = document.getElementById('dash-total-area');
 
-    // Colorir Mapa (Owner Mode)
-    if(currentMapMode === 'owners') {
-        const ownerColors = {};
-        top5.forEach((item, index) => ownerColors[item.name] = TOP_5_COLORS[index]);
-        layerGroupDash.eachLayer(layer => {
-            // Tentativa de recuperar owner da feature
-            // O Leaflet encapsula. Precisamos navegar.
-            // Simplificação: apenas redesenhar
-            // Para produção real, melhor fazer loop duplo: calcula stats -> define cores -> desenha mapa.
-            // Aqui vamos apenas atualizar a lista lateral por enquanto.
-        });
-        
-        // Redesenhar mapa com cores corretas
-        layerGroupDash.clearLayers();
-        farms.forEach(f => {
-            const owner = f.owner || 'ND';
-            let color = ownerColors[owner] || OTHER_COLOR;
-            const feats = f.geojson.features || [f.geojson];
-            feats.forEach(ft => {
-                const layer = L.geoJSON(ft, { style: { color: color, weight: 1, fillColor: color, fillOpacity: 0.6 } });
-                layer.bindTooltip((ft.properties.talhao || '').replace(/Talhão\s*/i,''), {direction:'center', className:'talhao-label', permanent:true});
-                layerGroupDash.addLayer(layer);
-            });
-        });
-    }
-
-    // Atualizar UI Lista
     totalEl.innerText = totalArea.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + " ha";
     listEl.innerHTML = '';
     const maxArea = top5.length > 0 ? top5[0].area : 1;
-    
+
     top5.forEach((item, index) => {
         const percent = (item.area / maxArea) * 100;
         const color = TOP_5_COLORS[index];
         listEl.innerHTML += `
-            <li onclick="filterDashboardMap('${item.name}')">
-                <div class="top5-header"><span class="top5-name"><span class="legend-dot" style="background:${color}"></span>${index+1}. ${item.name}</span><span class="top5-val">${item.area.toFixed(2)} ha</span></div>
-                <div class="top5-bar-bg"><div class="top5-bar-fill" style="width:${percent}%; background:${color}"></div></div>
+            <li onclick="filterDashboardMap('${item.name}')" style="cursor:pointer" title="Filtrar por ${item.name}">
+                <div class="top5-header">
+                    <span class="top5-name">
+                        <span class="legend-dot" style="background:${color}"></span>
+                        ${index+1}. ${item.name}
+                    </span>
+                    <span class="top5-val">${item.area.toFixed(2)} ha</span>
+                </div>
+                <div class="top5-bar-bg">
+                    <div class="top5-bar-fill" style="width:${percent}%; background:${color}"></div>
+                </div>
             </li>`;
     });
 
-    // Renderizar Gráfico
+    if(others.length > 0) {
+        listEl.innerHTML += `
+           <li onclick="filterDashboardMap(null)" style="cursor:pointer; margin-top:10px; border-top:1px dashed #444; padding-top:8px;">
+               <div class="top5-header">
+                   <span class="top5-name">
+                       <span class="legend-dot" style="background:${OTHER_COLOR}"></span>
+                       Outros (${others.length})
+                   </span>
+                   <span class="top5-val">${othersArea.toFixed(2)} ha</span>
+               </div>
+               <div class="top5-bar-bg">
+                   <div class="top5-bar-fill" style="width: ${(othersArea/totalArea)*100}%; background: ${OTHER_COLOR}"></div>
+               </div>
+           </li>`;
+   }
+
     renderChart();
 }
 
 async function renderChart() {
     const ctx = document.getElementById('chart-producao');
     if(!ctx) return;
-    
-    // Dados Mockados ou Reais
-    // Ideal: select sum(toneladas) from producao group by month
     const { data } = await sb.from('producao').select('toneladas, data_producao');
-    
     let monthlyData = Array(12).fill(0);
     if(data) {
         data.forEach(d => {
-            const month = new Date(d.data_producao).getMonth();
-            monthlyData[month] += d.toneladas;
+            if(d.data_producao) {
+                const parts = d.data_producao.split('-');
+                const month = parseInt(parts[1]) - 1; 
+                if(month >= 0 && month <= 11) monthlyData[month] += Number(d.toneladas);
+            }
         });
     }
 
@@ -215,21 +244,22 @@ async function renderChart() {
                 label: 'Produção (Ton)',
                 data: monthlyData,
                 backgroundColor: '#10b981',
-                borderRadius: 4
+                borderRadius: 4,
+                borderWidth: 0
             }]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` ${Number(c.raw).toFixed(2)} Ton` } } },
             scales: {
-                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                y: { beginAtZero: true, grid: { color: '#334155', drawBorder: false }, ticks: { color: '#94a3b8', font: {size: 10} } },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: {size: 10} } }
             }
         }
     });
 }
 
-// Clima (Open-Meteo API)
 async function fetchWeather() {
     const lat = USINA_COORDS[0];
     const lng = USINA_COORDS[1];
@@ -239,11 +269,11 @@ async function fetchWeather() {
         if(data.current_weather) {
             document.getElementById('weather-temp').innerText = `${data.current_weather.temperature}°C`;
             const code = data.current_weather.weathercode;
-            // Simplificado códigos WMO
             let desc = "Limpo";
             if(code > 3) desc = "Nublado";
+            if(code > 45) desc = "Nevoeiro";
             if(code > 50) desc = "Chuva";
-            if(code > 90) desc = "Tempestade";
+            if(code > 95) desc = "Tempestade";
             document.getElementById('weather-desc').innerText = desc;
         }
     } catch(e) { console.error("Erro clima", e); }
@@ -252,17 +282,32 @@ async function fetchWeather() {
 window.setMapMode = function(mode) {
     currentMapMode = mode;
     document.querySelectorAll('.map-ctrl-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
-    loadDashboardData(); // Recarrega com nova lógica de cores
-}
+    const btn = event.target.closest('.map-ctrl-btn');
+    if(btn) btn.classList.add('active');
+    loadDashboardData();
+};
 
 window.filterDashboardMap = function(ownerName) {
-    // Implementar filtro visual (opacidade)
-    showToast('Filtro: ' + ownerName);
-}
+    if(!layerGroupDash) return;
+    layerGroupDash.eachLayer(layer => {
+        let featOwner = null;
+        if(layer.feature && layer.feature.properties) featOwner = layer.feature.properties.owner;
+        
+        if(!ownerName || featOwner === ownerName) {
+            // Destaca usando a cor original da feature (recuperada do style atual ou recalculada)
+            // Para simplificar, forçamos opacidade alta
+            const currentColor = layer.options.color || '#fff'; 
+            layer.setStyle({ fillOpacity: 0.6, opacity: 1, weight: 3, color: currentColor });
+            if(featOwner === ownerName) layer.bringToFront();
+        } else {
+            layer.setStyle({ fillOpacity: 0.1, opacity: 0.1, weight: 0 });
+        }
+    });
+    if(ownerName) showToast(`Filtrado: ${ownerName}`);
+    else showToast('Filtro Limpo');
+};
 
 document.getElementById('btn-close-modal').onclick = () => document.getElementById('modal-overlay').classList.add('hidden');
 window.addEventListener('resize', () => { if(mapDash) mapDash.invalidateSize(); });
 
-// Init
 loadDashboardData();
